@@ -53,9 +53,16 @@ class S3Screen(Screen):
         except Exception:
             return
         ep = self.s3_app.endpoint_label
+        hint = (
+            "requires UW network or VPN"
+            if ep == "Campus"
+            else "works from any network"
+        )
         bar.update(
             Text.from_markup(
-                f"  [bold]Endpoint:[/] {ep}   [dim italic]click or press e to switch[/]"
+                f"  [bold]Endpoint:[/] {ep} [dim]({hint})[/]"
+                f"   [dim italic]click or press e to switch[/]\n"
+                f"  [dim]Buckets are tied to the endpoint chosen at creation time[/]"
             )
         )
 

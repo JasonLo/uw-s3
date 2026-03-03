@@ -50,7 +50,10 @@ while true; do
     echo "Secret key cannot be empty."
 done
 
-printf "Endpoint — campus (UW VPN) or web (any network) [campus]: "
+echo "Endpoint:"
+echo "  campus — faster, but requires UW network or VPN (will hang otherwise)"
+echo "  web    — works from any network"
+printf "Choose endpoint [campus]: "
 read -r endpoint < /dev/tty
 endpoint=${endpoint:-campus}
 
