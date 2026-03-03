@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="git+https://github.com/JasonLo/uw-s3.git"
+REPO="git+https://github.com/jasonlo/uw-s3.git"
 CONFIG_DIR="$HOME/.config/uw-s3"
 ENV_FILE="$CONFIG_DIR/.env"
 
@@ -16,30 +16,49 @@ echo
 # Set up credentials
 if [ -f "$ENV_FILE" ]; then
     echo "Credentials already configured at $ENV_FILE"
-else
-    echo "Enter your UW Research Object Storage credentials."
-    echo "(Get them from https://storage.researchdata.wisc.edu)"
-    echo
-    read -rp "S3_ACCESS_KEY_ID: " access_key
-    read -rsp "S3_SECRET_ACCESS_KEY: " secret_key
-    echo
-    read -rp "S3_ENDPOINT (campus/web) [campus]: " endpoint
-    endpoint=${endpoint:-campus}
+    read -rp "Overwrite? (y/N): " overwrite
+    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+        echo "Keeping existing credentials."
+        echo
+        echo "Done! Run 'uw-s3' to start."
+        exit 0
+    fi
+fi
 
-    mkdir -p "$CONFIG_DIR"
-    cat > "$ENV_FILE" <<EOF
+echo "Enter your UW Research Object Storage credentials."
+echo "Get them from https://storage.researchdata.wisc.edu"
+echo
+
+while true; do
+    read -rp "Access Key ID: " access_key
+    [ -n "$access_key" ] && break
+    echo "Access key cannot be empty."
+done
+
+while true; do
+    read -rsp "Secret Access Key: " secret_key
+    echo
+    [ -n "$secret_key" ] && break
+    echo "Secret key cannot be empty."
+done
+
+read -rp "Endpoint — campus (UW VPN) or web (any network) [campus]: " endpoint
+endpoint=${endpoint:-campus}
+
+mkdir -p "$CONFIG_DIR"
+cat > "$ENV_FILE" <<EOF
 S3_ACCESS_KEY_ID=$access_key
 S3_SECRET_ACCESS_KEY=$secret_key
 S3_ENDPOINT=$endpoint
 EOF
-    chmod 600 "$ENV_FILE"
-    echo "Credentials saved to $ENV_FILE"
-fi
+chmod 600 "$ENV_FILE"
 echo
+echo "Credentials saved to $ENV_FILE"
 
 # Optional: install rclone for mount support
+echo
 if command -v rclone &>/dev/null; then
-    echo "rclone found: $(rclone version --check | head -1 2>/dev/null || rclone --version | head -1)"
+    echo "rclone found (mount support available)."
 else
     read -rp "Install rclone for mount support? (y/N): " install_rclone
     if [[ "$install_rclone" =~ ^[Yy]$ ]]; then
@@ -48,6 +67,6 @@ else
         echo "Skipping rclone (mount feature will be unavailable)."
     fi
 fi
-echo
 
+echo
 echo "Done! Run 'uw-s3' to start."
