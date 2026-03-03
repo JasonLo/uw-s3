@@ -1,0 +1,33 @@
+[project]
+name = "uw-s3"
+version = "0.1.0"
+description = "A short description of the project"
+readme = "README.md"
+authors = [
+    { name = "Jason Lo", email = "lcmjlo@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "minio>=7.2.0",
+    "python-dotenv>=1.2.2",
+    "textual>=4.0.0",
+]
+
+[project.scripts]
+uw-s3 = "uw_s3.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "altair>=6.0.0",
+    "ipykernel>=7.2.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pandas>=3.0.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.4",
+    "ty>=0.0.20",
+]
