@@ -43,14 +43,14 @@ class RcloneMount:
             f"secret_access_key = {self.secret_key}\n"
             f"endpoint = https://{self.endpoint}\n"
         )
-        fd, path = tempfile.mkstemp(prefix="uw-s3-rclone-", suffix=".conf")
-        p = Path(path)
-        p.write_text(content)
-        # Close the file descriptor opened by mkstemp
         import os
 
-        os.close(fd)
-        return p
+        fd, path = tempfile.mkstemp(prefix="uw-s3-rclone-", suffix=".conf")
+        try:
+            os.write(fd, content.encode())
+        finally:
+            os.close(fd)
+        return Path(path)
 
     @property
     def is_mounted(self) -> bool:
@@ -60,7 +60,9 @@ class RcloneMount:
     def mount(self) -> None:
         """Mount the bucket at the configured mount point."""
         if self.is_mounted:
-            raise RuntimeError(f"{self.bucket} is already mounted at {self.mount_point}")
+            raise RuntimeError(
+                f"{self.bucket} is already mounted at {self.mount_point}"
+            )
 
         rclone = find_rclone()
         if rclone is None:
@@ -99,13 +101,14 @@ class RcloneMount:
             self._process = None
 
         # Fallback: fusermount -u in case the mount is still active
+        _fusermount_errors = (FileNotFoundError, subprocess.TimeoutExpired)
         try:
             subprocess.run(
                 ["fusermount", "-u", str(self.mount_point)],
                 capture_output=True,
                 timeout=5,
             )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except _fusermount_errors:
             pass
 
         self._cleanup_config()
@@ -122,7 +125,7 @@ class RcloneMount:
             return ""
         import select
 
+        # select.select works with pipes on Unix only
         if select.select([self._process.stdout], [], [], 0)[0]:
-            line = self._process.stdout.readline()
-            return line
+            return self._process.stdout.readline()
         return ""

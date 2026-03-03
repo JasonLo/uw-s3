@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
+from typing import cast
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -21,9 +21,11 @@ from textual.widgets import (
     Log,
 )
 
-from uw_s3.rclone import RcloneMount, find_rclone
+from rich.text import Text
 
-_BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$")
+from uw_s3.rclone import RcloneMount, find_rclone
+from uw_s3.validators import BUCKET_NAME_RE
+
 _DEFAULT_MOUNT_ROOT = Path("./s3")
 
 
@@ -33,6 +35,10 @@ class MountScreen(Screen):
     BINDINGS = [Binding("escape", "pop_screen", "Back")]
 
     CSS = """
+    #active-mounts-panel { height: auto; max-height: 12; margin: 0 2; border: round $accent; padding: 1; }
+    #active-mounts { height: auto; max-height: 8; }
+    #unmount-row { height: auto; margin-top: 1; }
+    #unmount-row Button { margin-right: 1; }
     #layout { height: 1fr; }
     #tree { width: 1fr; height: 1fr; margin-right: 1; border: solid $accent; }
     #buckets { width: 1fr; height: 1fr; margin-right: 1; padding: 1 2; border: solid $accent; }
@@ -48,11 +54,20 @@ class MountScreen(Screen):
 
     _selected_bucket: str = ""
     _selected_path: str = ""
+    _selected_active_mount: str = ""
 
     def compose(self) -> ComposeResult:
-        _DEFAULT_MOUNT_ROOT.mkdir(parents=True, exist_ok=True)
-
         yield Header()
+        with Vertical(id="active-mounts-panel") as amp:
+            amp.border_title = "Active Mounts"
+            yield DataTable(id="active-mounts")
+            with Horizontal(id="unmount-row"):
+                yield Button(
+                    "Unmount Selected",
+                    variant="error",
+                    id="unmount-active-btn",
+                    disabled=True,
+                )
         with Horizontal(id="layout"):
             tree = DirectoryTree(str(_DEFAULT_MOUNT_ROOT), id="tree")
             tree.border_title = "Mount Point"
@@ -80,27 +95,42 @@ class MountScreen(Screen):
                 yield Label("[dim]Not mounted[/]", id="mount-status")
                 with Horizontal(classes="btn-row"):
                     yield Button("Mount", variant="primary", id="mount-btn")
-                    yield Button("Unmount", variant="error", id="unmount-btn", disabled=True)
+                    yield Button(
+                        "Unmount", variant="error", id="unmount-btn", disabled=True
+                    )
                 log = Log(id="log")
                 log.border_title = "Output"
                 yield log
         yield Footer()
 
     def on_mount(self) -> None:
+        _DEFAULT_MOUNT_ROOT.mkdir(parents=True, exist_ok=True)
         table = self.query_one("#bucket-table", DataTable)
         table.add_column("Bucket Name", key="name")
         table.cursor_type = "row"
+        am_table = self.query_one("#active-mounts", DataTable)
+        am_table.add_column("Bucket", key="bucket")
+        am_table.add_column("Mount Point", key="path")
+        am_table.add_column("Status", key="status")
+        am_table.cursor_type = "row"
         self._selected_path = str(_DEFAULT_MOUNT_ROOT.resolve())
         self._load_buckets()
+        self._refresh_active_mounts()
         if find_rclone() is None:
             log = self.query_one("#log", Log)
-            log.write_line("rclone is not installed. Install it from https://rclone.org/install/")
-            self.query_one("#mount-status", Label).update("[bold red]rclone not found[/]")
+            log.write_line(
+                "rclone is not installed. Install it from https://rclone.org/install/"
+            )
+            self.query_one("#mount-status", Label).update(
+                "[bold red]rclone not found[/]"
+            )
             self.query_one("#mount-btn", Button).disabled = True
 
     @work(thread=True)
     def _load_buckets(self) -> None:
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
         table = self.query_one("#bucket-table", DataTable)
         try:
             buckets = app.s3.list_buckets()
@@ -110,6 +140,54 @@ class MountScreen(Screen):
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.app.call_from_thread(log.write_line, f"Error loading buckets: {exc}")
+
+    def _refresh_active_mounts(self) -> None:
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
+        table = self.query_one("#active-mounts", DataTable)
+        table.clear()
+        self._selected_active_mount = ""
+        self.query_one("#unmount-active-btn", Button).disabled = True
+        for bucket, rm in app.active_mounts.items():
+            status = (
+                Text("mounted", style="green")
+                if rm.is_mounted
+                else Text("stopped", style="red")
+            )
+            table.add_row(bucket, str(rm.mount_point), status, key=bucket)
+
+    @on(DataTable.RowHighlighted, "#active-mounts")
+    def _on_active_mount_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.row_key.value is not None:
+            self._selected_active_mount = str(event.row_key.value)
+            self.query_one("#unmount-active-btn", Button).disabled = False
+
+    @on(Button.Pressed, "#unmount-active-btn")
+    @work(thread=True, exclusive=True)
+    def handle_unmount_active(self) -> None:
+        log = self.query_one("#log", Log)
+        bucket = self._selected_active_mount
+        if not bucket:
+            self.app.call_from_thread(log.write_line, "Select an active mount first.")
+            return
+
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
+        rm = app.active_mounts.get(bucket)
+        if rm is None:
+            self.app.call_from_thread(log.write_line, f"{bucket} is not mounted.")
+            return
+
+        self.app.call_from_thread(log.write_line, f"Unmounting {bucket}...")
+        try:
+            rm.unmount()
+            del app.active_mounts[bucket]
+            self.app.call_from_thread(log.write_line, f"Unmounted {bucket}.")
+            self.app.call_from_thread(self._refresh_active_mounts)
+        except Exception as exc:
+            self.app.call_from_thread(log.write_line, f"Unmount failed: {exc}")
 
     @on(DataTable.RowSelected, "#bucket-table")
     def _on_bucket_selected(self, event: DataTable.RowSelected) -> None:
@@ -142,17 +220,21 @@ class MountScreen(Screen):
         if not name:
             self.app.call_from_thread(log.write_line, "Bucket name is required.")
             return
-        if not _BUCKET_RE.match(name):
+        if not BUCKET_NAME_RE.match(name):
             self.app.call_from_thread(
                 log.write_line,
                 "Invalid name: 3-63 chars, lowercase letters/digits/hyphens/dots.",
             )
             return
 
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
         try:
             if app.s3.bucket_exists(name):
-                self.app.call_from_thread(log.write_line, f"Bucket '{name}' already exists.")
+                self.app.call_from_thread(
+                    log.write_line, f"Bucket '{name}' already exists."
+                )
                 return
             app.s3.create_bucket(name)
             self.app.call_from_thread(log.write_line, f"Bucket '{name}' created.")
@@ -164,7 +246,7 @@ class MountScreen(Screen):
             self.app.call_from_thread(log.write_line, f"Error creating bucket: {exc}")
 
     @on(Button.Pressed, "#mount-btn")
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def handle_mount(self) -> None:
         mount_path = self.app.call_from_thread(
             lambda: self.query_one("#mount-path", Input).value
@@ -179,7 +261,9 @@ class MountScreen(Screen):
             return
 
         bucket = self._selected_bucket
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
 
         if bucket in app.active_mounts and app.active_mounts[bucket].is_mounted:
             self.app.call_from_thread(log.write_line, f"{bucket} is already mounted.")
@@ -200,11 +284,12 @@ class MountScreen(Screen):
             app.active_mounts[bucket] = rm
             self.app.call_from_thread(log.write_line, f"Mounted {bucket} at {resolved}")
             self.app.call_from_thread(self._update_ui_mounted, True)
+            self.app.call_from_thread(self._refresh_active_mounts)
         except Exception as exc:
             self.app.call_from_thread(log.write_line, f"Mount failed: {exc}")
 
     @on(Button.Pressed, "#unmount-btn")
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def handle_unmount(self) -> None:
         log = self.query_one("#log", Log)
 
@@ -213,7 +298,9 @@ class MountScreen(Screen):
             return
 
         bucket = self._selected_bucket
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
 
         rm = app.active_mounts.get(bucket)
         if rm is None or not rm.is_mounted:
@@ -226,6 +313,7 @@ class MountScreen(Screen):
             del app.active_mounts[bucket]
             self.app.call_from_thread(log.write_line, f"Unmounted {bucket}.")
             self.app.call_from_thread(self._update_ui_mounted, False)
+            self.app.call_from_thread(self._refresh_active_mounts)
         except Exception as exc:
             self.app.call_from_thread(log.write_line, f"Unmount failed: {exc}")
 

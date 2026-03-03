@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from minio.error import S3Error
-
 from uw_s3 import UWS3
 from uw_s3.sync.models import SyncMap
 
@@ -46,16 +44,15 @@ class SyncEngine:
 
     def _remote_objects(self) -> dict[str, int]:
         """Return {relative_path: size} for all objects under the prefix."""
-        result: dict[str, int] = {}
         prefix = self.mapping.prefix.rstrip("/")
         prefix_with_slash = f"{prefix}/" if prefix else ""
-        for obj in self.client.client.list_objects(
+        result: dict[str, int] = {}
+        for name, size in self.client.list_objects_with_size(
             self.mapping.bucket, prefix=prefix_with_slash, recursive=True
         ):
-            name = obj.object_name
             if prefix_with_slash and name.startswith(prefix_with_slash):
                 name = name[len(prefix_with_slash) :]
-            result[name] = obj.size or 0
+            result[name] = size
         return result
 
     def status_push(self) -> list[SyncAction]:

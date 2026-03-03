@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
 from minio import Minio
 from minio.error import S3Error
+
+
+@dataclass
+class ObjectInfo:
+    """Metadata for a single S3 object."""
+
+    name: str
+    size: int
+    last_modified: datetime | None
+
 
 CAMPUS_ENDPOINT = "campus.s3.wisc.edu"
 WEB_ENDPOINT = "web.s3.wisc.edu"
@@ -58,6 +69,32 @@ class UWS3:
             )
         ]
 
+    def list_objects_with_size(
+        self, bucket: str, *, prefix: str = "", recursive: bool = True
+    ) -> list[tuple[str, int]]:
+        """Return (object_name, size) pairs for objects in a bucket."""
+        return [
+            (obj.object_name, obj.size or 0)
+            for obj in self.client.list_objects(
+                bucket, prefix=prefix, recursive=recursive
+            )
+        ]
+
+    def list_objects_detail(
+        self, bucket: str, *, prefix: str = "", recursive: bool = True
+    ) -> list[ObjectInfo]:
+        """Return detailed metadata for objects in a bucket."""
+        return [
+            ObjectInfo(
+                name=obj.object_name,
+                size=obj.size or 0,
+                last_modified=obj.last_modified,
+            )
+            for obj in self.client.list_objects(
+                bucket, prefix=prefix, recursive=recursive
+            )
+        ]
+
     def upload_file(self, bucket: str, object_name: str, file_path: str | Path) -> None:
         self.client.fput_object(bucket, object_name, str(file_path))
 
@@ -100,6 +137,6 @@ class UWS3:
         """Create a new bucket."""
         self.client.make_bucket(bucket)
 
-    def stat_object(self, bucket: str, object_name: str):
+    def stat_object(self, bucket: str, object_name: str) -> object:
         """Return stat info for an object (size, last_modified, etc.)."""
         return self.client.stat_object(bucket, object_name)

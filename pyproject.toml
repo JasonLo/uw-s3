@@ -1,7 +1,7 @@
 [project]
 name = "uw-s3"
 version = "0.1.0"
-description = "A short description of the project"
+description = "Terminal UI for UW-Madison Research Object Storage (S3)"
 readme = "README.md"
 authors = [
     { name = "Jason Lo", email = "lcmjlo@gmail.com" }
@@ -22,12 +22,14 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.15.4",
+    "ty>=0.0.20",
+]
+notebook = [
     "altair>=6.0.0",
     "ipykernel>=7.2.0",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "pandas>=3.0.1",
-    "pytest>=9.0.2",
-    "ruff>=0.15.4",
-    "ty>=0.0.20",
 ]

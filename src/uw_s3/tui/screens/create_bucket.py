@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import re
+from typing import cast
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -12,13 +12,12 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Label, Select
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
+from uw_s3.validators import BUCKET_NAME_RE
 
 ENDPOINT_OPTIONS: list[tuple[str, str]] = [
     ("Campus (UW network / VPN)", CAMPUS_ENDPOINT),
     ("Web (any network)", WEB_ENDPOINT),
 ]
-
-_BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$")
 
 
 class CreateBucketScreen(Screen):
@@ -47,7 +46,12 @@ class CreateBucketScreen(Screen):
         yield Header()
         with Vertical(id="form"):
             yield Label("Endpoint")
-            yield Select(ENDPOINT_OPTIONS, value=CAMPUS_ENDPOINT, id="endpoint", allow_blank=False)
+            yield Select(
+                ENDPOINT_OPTIONS,
+                value=CAMPUS_ENDPOINT,
+                id="endpoint",
+                allow_blank=False,
+            )
             yield Label("Bucket Name")
             yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
             yield Button("Create Bucket", variant="primary", id="create_btn")
@@ -64,22 +68,28 @@ class CreateBucketScreen(Screen):
         if not name:
             self.app.call_from_thread(status.update, "Bucket name is required.")
             return
-        if not _BUCKET_RE.match(name):
+        if not BUCKET_NAME_RE.match(name):
             self.app.call_from_thread(
                 status.update,
                 "Invalid name: 3-63 chars, lowercase letters/digits/hyphens/dots.",
             )
             return
 
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
         client = UWS3(app.access_key, app.secret_key, endpoint=str(endpoint))
 
         try:
             if client.bucket_exists(name):
-                self.app.call_from_thread(status.update, f"Bucket '{name}' already exists.")
+                self.app.call_from_thread(
+                    status.update, f"Bucket '{name}' already exists."
+                )
                 return
             client.create_bucket(name)
-            self.app.call_from_thread(status.update, f"Bucket '{name}' created successfully!")
+            self.app.call_from_thread(
+                status.update, f"Bucket '{name}' created successfully!"
+            )
         except Exception as exc:
             self.app.call_from_thread(status.update, f"Error: {exc}")
 

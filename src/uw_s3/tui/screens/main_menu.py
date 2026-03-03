@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from rich.console import Group
 from rich.text import Text
 
@@ -24,7 +26,7 @@ class MainMenuScreen(Screen):
 
     BINDINGS = [
         Binding("e", "switch_endpoint", "Switch Endpoint"),
-        Binding("s", "sync_folder", "Sync Folder"),
+        Binding("f", "file_manager", "File Manager"),
         Binding("m", "mount_bucket", "Mount Bucket"),
         Binding("q", "quit", "Quit"),
     ]
@@ -44,11 +46,19 @@ class MainMenuScreen(Screen):
         yield Static("", id="endpoint-info")
         yield OptionList(
             Option(
-                _option("s", "Sync Folder", "Push and pull files between a local folder and S3"),
-                id="sync",
+                _option(
+                    "f",
+                    "File Manager",
+                    "Browse buckets, upload/download files, and sync folders",
+                ),
+                id="file_manager",
             ),
             Option(
-                _option("m", "Mount Bucket", "Mount an S3 bucket as a local directory via rclone"),
+                _option(
+                    "m",
+                    "Mount Bucket",
+                    "Mount an S3 bucket as a local directory via rclone",
+                ),
                 id="mount",
             ),
             Option(
@@ -61,7 +71,7 @@ class MainMenuScreen(Screen):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         actions = {
-            "sync": self.action_sync_folder,
+            "file_manager": self.action_file_manager,
             "mount": self.action_mount_bucket,
             "quit": self.action_quit,
         }
@@ -70,7 +80,9 @@ class MainMenuScreen(Screen):
             action()
 
     def _update_endpoint_label(self) -> None:
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
         ep = app.endpoint_label
         info = self.query_one("#endpoint-info", Static)
         info.update(
@@ -86,15 +98,17 @@ class MainMenuScreen(Screen):
         self._update_endpoint_label()
 
     def action_switch_endpoint(self) -> None:
-        app = self.app  # type: ignore[assignment]
+        from uw_s3.tui.app import UWS3App
+
+        app = cast(UWS3App, self.app)
         app.switch_endpoint()
         self._update_endpoint_label()
         self.notify(f"Switched to {app.endpoint_label}")
 
-    def action_sync_folder(self) -> None:
-        from uw_s3.tui.screens.sync import SyncScreen
+    def action_file_manager(self) -> None:
+        from uw_s3.tui.screens.file_manager import FileManagerScreen
 
-        self.app.push_screen(SyncScreen())
+        self.app.push_screen(FileManagerScreen())
 
     def action_mount_bucket(self) -> None:
         from uw_s3.tui.screens.mount import MountScreen
