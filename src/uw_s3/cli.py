@@ -1,8 +1,8 @@
 """CLI entry point — loads credentials and launches the TUI."""
 
-from __future__ import annotations
-
+import atexit
 import os
+import signal
 import sys
 
 from dotenv import load_dotenv
@@ -29,4 +29,22 @@ def main() -> None:
     endpoint = WEB_ENDPOINT if endpoint_env == "web" else CAMPUS_ENDPOINT
 
     app = UWS3App(access_key=access_key, secret_key=secret_key, endpoint=endpoint)
+
+    def _cleanup_mounts() -> None:
+        for rm in app.active_mounts.values():
+            try:
+                rm.unmount()
+            except Exception:
+                pass
+        app.active_mounts.clear()
+
+    atexit.register(_cleanup_mounts)
+
+    def _signal_handler(signum: int, _frame: object) -> None:
+        _cleanup_mounts()
+        sys.exit(128 + signum)
+
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGHUP, _signal_handler)
+
     app.run()

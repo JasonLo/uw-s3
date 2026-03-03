@@ -1,7 +1,6 @@
 """Rclone wrapper for mounting S3 buckets as local folders via FUSE."""
 
-from __future__ import annotations
-
+import os
 import shutil
 import subprocess
 import tempfile
@@ -43,8 +42,6 @@ class RcloneMount:
             f"secret_access_key = {self.secret_key}\n"
             f"endpoint = https://{self.endpoint}\n"
         )
-        import os
-
         fd, path = tempfile.mkstemp(prefix="uw-s3-rclone-", suffix=".conf")
         try:
             os.write(fd, content.encode())
@@ -118,14 +115,3 @@ class RcloneMount:
         if self._config_file is not None:
             self._config_file.unlink(missing_ok=True)
             self._config_file = None
-
-    def read_output(self) -> str:
-        """Read any available stdout/stderr from rclone (non-blocking)."""
-        if self._process is None or self._process.stdout is None:
-            return ""
-        import select
-
-        # select.select works with pipes on Unix only
-        if select.select([self._process.stdout], [], [], 0)[0]:
-            return self._process.stdout.readline()
-        return ""

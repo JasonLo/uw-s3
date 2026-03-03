@@ -1,7 +1,5 @@
 """Tests for sync map data model."""
 
-from __future__ import annotations
-
 from uw_s3.sync.models import SyncMap
 
 

@@ -1,7 +1,6 @@
 """Sync engine — push/pull files between a local directory and S3."""
 
-from __future__ import annotations
-
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -79,7 +78,9 @@ class SyncEngine:
                 actions.append(SyncAction(rel, "pull", "size differs"))
         return actions
 
-    def push(self, callback=None) -> list[SyncAction]:
+    def push(
+        self, callback: Callable[[SyncAction], object] | None = None
+    ) -> list[SyncAction]:
         """Upload local files that are new or differ in size."""
         actions = self.status_push()
         for action in actions:
@@ -90,7 +91,9 @@ class SyncEngine:
                 callback(action)
         return actions
 
-    def pull(self, callback=None) -> list[SyncAction]:
+    def pull(
+        self, callback: Callable[[SyncAction], object] | None = None
+    ) -> list[SyncAction]:
         """Download S3 objects that are new or differ in size."""
         actions = self.status_pull()
         for action in actions:

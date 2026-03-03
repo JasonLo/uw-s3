@@ -1,33 +1,10 @@
 """Main Textual application for uw-s3."""
 
-from __future__ import annotations
-
 from textual.app import App
-from textual.theme import Theme
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
 from uw_s3.rclone import RcloneMount
 from uw_s3.tui.screens.main_menu import MainMenuScreen
-
-UW_THEME = Theme(
-    name="uw-s3",
-    primary="#7AA2F7",
-    secondary="#7B8FA1",
-    accent="#BB9AF7",
-    foreground="#C0CAF5",
-    background="#1A1B26",
-    success="#9ECE6A",
-    warning="#E0AF68",
-    error="#F7768E",
-    surface="#24283B",
-    panel="#414868",
-    dark=True,
-    variables={
-        "footer-key-foreground": "#7AA2F7",
-        "block-cursor-text-style": "bold",
-        "input-selection-background": "#7AA2F7 30%",
-    },
-)
 
 
 class UWS3App(App):
@@ -60,8 +37,7 @@ class UWS3App(App):
         self.sub_title = f"Endpoint: {self.endpoint_label}"
 
     def on_mount(self) -> None:
-        self.register_theme(UW_THEME)
-        self.theme = "uw-s3"
+        self.theme = "atom-one-dark"
         self.sub_title = f"Endpoint: {self.endpoint_label}"
         self.push_screen(MainMenuScreen())
 

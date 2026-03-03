@@ -1,7 +1,5 @@
 """Data models for sync mappings."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 

@@ -1,7 +1,5 @@
 """Tests for sync config persistence."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from uw_s3.sync.config import load_mappings, save_mappings, add_mapping, remove_mapping

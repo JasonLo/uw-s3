@@ -1,12 +1,9 @@
-from __future__ import annotations
-
+import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from io import BytesIO
+from datetime import datetime
 from pathlib import Path
 
 from minio import Minio
-from minio.error import S3Error
 
 
 @dataclass
@@ -40,21 +37,6 @@ class UWS3:
             secret_key=secret_key,
             secure=secure,
         )
-
-    @classmethod
-    def campus(cls, access_key: str, secret_key: str) -> UWS3:
-        """Connect via the campus-only pool (requires UW network/VPN)."""
-        return cls(access_key, secret_key, endpoint=CAMPUS_ENDPOINT)
-
-    @classmethod
-    def web(cls, access_key: str, secret_key: str) -> UWS3:
-        """Connect via the web pool (any network)."""
-        return cls(access_key, secret_key, endpoint=WEB_ENDPOINT)
-
-    @staticmethod
-    def default_bucket(netid: str) -> str:
-        """Return the default bucket name for a given NetID."""
-        return f"{netid}-bucket-01"
 
     def list_buckets(self) -> list[str]:
         return [b.name for b in self.client.list_buckets()]
@@ -103,32 +85,6 @@ class UWS3:
     ) -> None:
         self.client.fget_object(bucket, object_name, str(file_path))
 
-    def put_bytes(self, bucket: str, object_name: str, data: bytes) -> None:
-        self.client.put_object(bucket, object_name, BytesIO(data), len(data))
-
-    def get_bytes(self, bucket: str, object_name: str) -> bytes:
-        resp = self.client.get_object(bucket, object_name)
-        try:
-            return resp.read()
-        finally:
-            resp.close()
-            resp.release_conn()
-
-    def delete(self, bucket: str, object_name: str) -> None:
-        self.client.remove_object(bucket, object_name)
-
-    def presigned_get(
-        self, bucket: str, object_name: str, *, expires: timedelta = timedelta(hours=1)
-    ) -> str:
-        return self.client.presigned_get_object(bucket, object_name, expires=expires)
-
-    def exists(self, bucket: str, object_name: str) -> bool:
-        try:
-            self.client.stat_object(bucket, object_name)
-            return True
-        except S3Error:
-            return False
-
     def bucket_exists(self, bucket: str) -> bool:
         """Check if a bucket exists."""
         return self.client.bucket_exists(bucket)
@@ -137,6 +93,44 @@ class UWS3:
         """Create a new bucket."""
         self.client.make_bucket(bucket)
 
-    def stat_object(self, bucket: str, object_name: str) -> object:
-        """Return stat info for an object (size, last_modified, etc.)."""
-        return self.client.stat_object(bucket, object_name)
+    def set_bucket_policy(self, bucket: str, permission: str) -> None:
+        """Set bucket access policy: 'private', 'public-read', or 'public-readwrite'."""
+        if permission == "private":
+            self.client.delete_bucket_policy(bucket)
+            return
+        statements: list[dict] = [
+            {
+                "Effect": "Allow",
+                "Principal": {"AWS": "*"},
+                "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+                "Resource": f"arn:aws:s3:::{bucket}",
+            },
+        ]
+        if permission == "public-read":
+            statements.append(
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "*"},
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket}/*",
+                }
+            )
+        elif permission == "public-readwrite":
+            statements.append(
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "*"},
+                    "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:DeleteObject",
+                    ],
+                    "Resource": f"arn:aws:s3:::{bucket}/*",
+                }
+            )
+        policy = {"Version": "2012-10-17", "Statement": statements}
+        self.client.set_bucket_policy(bucket, json.dumps(policy))
+
+    def delete_bucket(self, bucket: str) -> None:
+        """Remove an empty bucket."""
+        self.client.remove_bucket(bucket)

@@ -1,7 +1,5 @@
 """Tests for shared validators."""
 
-from __future__ import annotations
-
 from uw_s3.validators import BUCKET_NAME_RE
 
 

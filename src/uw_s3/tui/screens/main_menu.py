@@ -1,17 +1,14 @@
 """Main menu screen."""
 
-from __future__ import annotations
-
-from typing import cast
-
 from rich.console import Group
 from rich.text import Text
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
-from textual.widgets import Footer, Header, OptionList, Static
+from textual.widgets import Footer, Header, OptionList
 from textual.widgets.option_list import Option
+
+from uw_s3.tui.screens.base import EndpointBar, S3Screen
 
 
 def _option(key: str, title: str, desc: str) -> Group:
@@ -21,34 +18,38 @@ def _option(key: str, title: str, desc: str) -> Group:
     )
 
 
-class MainMenuScreen(Screen):
+class MainMenuScreen(S3Screen):
     """Landing screen with navigation options."""
 
     BINDINGS = [
-        Binding("e", "switch_endpoint", "Switch Endpoint"),
-        Binding("f", "file_manager", "File Manager"),
+        Binding("b", "bucket_management", "Manage Buckets"),
+        Binding("f", "file_manager", "Manage Files"),
         Binding("m", "mount_bucket", "Mount Bucket"),
         Binding("q", "quit", "Quit"),
     ]
 
     CSS = """
-    #endpoint-info {
-        height: auto;
-        padding: 1 2;
-    }
     #menu {
-        margin: 0 2;
+        margin: 1 2;
     }
     """
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("", id="endpoint-info")
+        yield EndpointBar()
         yield OptionList(
             Option(
                 _option(
+                    "b",
+                    "Manage Buckets",
+                    "Create, delete, and set permissions on S3 buckets",
+                ),
+                id="bucket_management",
+            ),
+            Option(
+                _option(
                     "f",
-                    "File Manager",
+                    "Manage Files",
                     "Browse buckets, upload/download files, and sync folders",
                 ),
                 id="file_manager",
@@ -72,6 +73,7 @@ class MainMenuScreen(Screen):
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         actions = {
             "file_manager": self.action_file_manager,
+            "bucket_management": self.action_bucket_management,
             "mount": self.action_mount_bucket,
             "quit": self.action_quit,
         }
@@ -79,36 +81,21 @@ class MainMenuScreen(Screen):
         if action:
             action()
 
-    def _update_endpoint_label(self) -> None:
-        from uw_s3.tui.app import UWS3App
-
-        app = cast(UWS3App, self.app)
-        ep = app.endpoint_label
-        info = self.query_one("#endpoint-info", Static)
-        info.update(
-            Text.from_markup(
-                f"  [bold]Endpoint:[/] {ep}   [dim italic]press e to switch[/]"
-            )
-        )
-
     def on_mount(self) -> None:
-        self._update_endpoint_label()
+        self._update_endpoint_bar()
 
     def on_screen_resume(self) -> None:
-        self._update_endpoint_label()
-
-    def action_switch_endpoint(self) -> None:
-        from uw_s3.tui.app import UWS3App
-
-        app = cast(UWS3App, self.app)
-        app.switch_endpoint()
-        self._update_endpoint_label()
-        self.notify(f"Switched to {app.endpoint_label}")
+        self._update_endpoint_bar()
 
     def action_file_manager(self) -> None:
         from uw_s3.tui.screens.file_manager import FileManagerScreen
 
         self.app.push_screen(FileManagerScreen())
+
+    def action_bucket_management(self) -> None:
+        from uw_s3.tui.screens.bucket_management import BucketManagementScreen
+
+        self.app.push_screen(BucketManagementScreen())
 
     def action_mount_bucket(self) -> None:
         from uw_s3.tui.screens.mount import MountScreen

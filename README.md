@@ -25,9 +25,10 @@ S3_ENDPOINT=campus  # "campus" (UW network/VPN, default) or "web" (any network)
 
 ## Usage
 
-The main menu provides two modes:
+The main menu provides three modes:
 
-- **File Manager** — browse buckets, upload/download individual files, and bulk-sync folders
+- **Manage Buckets** — create, delete, and set permissions on S3 buckets
+- **Manage Files** — browse buckets, upload/download individual files, and bulk-sync folders
 - **Mount Bucket** — mount a bucket as a local directory via rclone FUSE
 
 The endpoint (campus vs web) can be toggled at runtime from the main menu.

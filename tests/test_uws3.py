@@ -1,7 +1,5 @@
 """Tests for the UWS3 wrapper class."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from uw_s3 import UWS3, CAMPUS_ENDPOINT, WEB_ENDPOINT

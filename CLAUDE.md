@@ -11,7 +11,7 @@ uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the
 - Use uv run to run Python scripts
 - Prefer one-line docstrings for simple functions
 - Use Pydantic for objects with 7+ attributes
-- Always use static typing (Python 3.13+)
+- Always use static typing (Python 3.14+)
 - Check online docs for up-to-date syntax
 - Avoid unnecessary comments
 
@@ -39,6 +39,7 @@ src/uw_s3/
 ├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
 ├── cli.py               # Entry point: loads .env, creates UWS3App, calls app.run()
 ├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
+├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
 │   ├── models.py        # SyncMap dataclass (local_dir ↔ bucket mapping, auto-hashed ID)
 │   ├── config.py        # JSON persistence in ~/.config/uw-s3/sync.json
@@ -46,9 +47,12 @@ src/uw_s3/
 └── tui/
     ├── app.py           # UWS3App (Textual App) — holds UWS3 client + active_mounts dict
     └── screens/
-        ├── main_menu.py # Landing screen — endpoint switcher + navigation
-        ├── sync.py      # Two-pane: DirectoryTree + bucket selector + push/pull
-        └── mount.py     # Three-pane: DirectoryTree + bucket list + rclone mount controls
+        ├── base.py            # S3Screen — base screen with typed app access + threading helper
+        ├── main_menu.py       # Landing screen — endpoint switcher + navigation
+        ├── bucket_management.py # Bucket CRUD — list, create, delete, set permissions
+        ├── file_manager.py    # Unified file manager — browse, upload/download, sync
+        ├── confirm.py         # Reusable confirmation dialog
+        └── mount.py           # rclone mount controls
 ```
 
 **Data flow:** `cli.py` → `UWS3App` (holds credentials + `UWS3` client) → screens access `app.s3` for all S3 operations.
