@@ -1,6 +1,9 @@
 """Data models for sync mappings."""
 
+import hashlib
 from dataclasses import dataclass, field
+
+from uw_s3 import CAMPUS_ENDPOINT
 
 
 @dataclass
@@ -10,12 +13,10 @@ class SyncMap:
     local_dir: str
     bucket: str
     prefix: str = ""
-    endpoint: str = "campus.s3.wisc.edu"
+    endpoint: str = CAMPUS_ENDPOINT
     id: str = field(default="")
 
     def __post_init__(self) -> None:
         if not self.id:
-            import hashlib
-
             raw = f"{self.local_dir}:{self.bucket}:{self.prefix}:{self.endpoint}"
             self.id = hashlib.sha256(raw.encode()).hexdigest()[:12]

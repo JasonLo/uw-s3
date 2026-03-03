@@ -102,9 +102,7 @@ class MountScreen(S3Screen):
         default = _ensure_mount_root()
         self._selected_path = str(default)
         self.query_one("#mount-path", Input).value = str(default)
-        self.query_one("#selected-dir", Label).update(
-            f"Folder: [bold]{default}[/]"
-        )
+        self.query_one("#selected-dir", Label).update(f"Folder: [bold]{default}[/]")
         table = self.query_one("#bucket-table", DataTable)
         table.add_column("Bucket Name", key="name")
         table.cursor_type = "row"

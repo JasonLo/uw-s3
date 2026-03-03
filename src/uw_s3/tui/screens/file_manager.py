@@ -1,6 +1,7 @@
 """File Manager screen — local files + S3 objects in a unified view."""
 
 from pathlib import Path
+from typing import Literal
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -25,11 +26,12 @@ from uw_s3.tui.screens.base import EndpointBar, S3Screen
 
 def _human_size(size: int) -> str:
     """Format bytes into a human-readable string."""
+    fsize: float = size
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if abs(size) < 1024:
-            return f"{size:,.1f} {unit}" if unit != "B" else f"{size} B"
-        size //= 1024
-    return f"{size:,.1f} PB"
+        if abs(fsize) < 1024:
+            return f"{fsize:,.1f} {unit}" if unit != "B" else f"{size} B"
+        fsize /= 1024
+    return f"{fsize:,.1f} PB"
 
 
 class FileManagerScreen(S3Screen):
@@ -125,28 +127,30 @@ class FileManagerScreen(S3Screen):
 
     @work(thread=True)
     def _load_objects(self, bucket: str) -> None:
-        table = self.query_one("#s3-table", DataTable)
         try:
             objects = self.s3_app.s3.list_objects_detail(bucket)
-            self.ui(table.clear, columns=True)
-            self.ui(table.add_column, "Object Key", key="key")
-            self.ui(table.add_column, "Size", key="size")
-            self.ui(table.add_column, "Last Modified", key="modified")
+            rows: list[tuple[str, str, str]] = []
             for obj in objects:
                 modified = (
                     obj.last_modified.strftime("%Y-%m-%d %H:%M")
                     if obj.last_modified
                     else "—"
                 )
-                self.ui(
-                    table.add_row,
-                    obj.name,
-                    _human_size(obj.size),
-                    modified,
-                    key=obj.name,
+                rows.append((obj.name, _human_size(obj.size), modified))
+
+            def _rebuild_table() -> None:
+                table = self.query_one("#s3-table", DataTable)
+                table.clear(columns=True)
+                table.add_column("Object Key", key="key")
+                table.add_column("Size", key="size")
+                table.add_column("Last Modified", key="modified")
+                for name, size, mod in rows:
+                    table.add_row(name, size, mod, key=name)
+                self.query_one("#bucket-info", Label).update(
+                    f"[dim]{len(rows)} object(s)[/]"
                 )
-            info = self.query_one("#bucket-info", Label)
-            self.ui(info.update, f"[dim]{len(objects)} object(s)[/]")
+
+            self.ui(_rebuild_table)
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading objects: {exc}")
@@ -191,67 +195,81 @@ class FileManagerScreen(S3Screen):
     def _log(self) -> Log:
         return self.query_one("#log", Log)
 
-    # --- preview push ---
+    # --- sync helpers ---
+
+    def _make_engine(self) -> tuple[SyncEngine, Log] | None:
+        """Validate bucket + local dir and return (engine, log) or None."""
+        log = self._log()
+        bucket = self.ui(self._current_bucket)
+        if not bucket:
+            self.ui(log.write_line, "Select a bucket first.")
+            return None
+        local_dir = self.ui(self._selected_local_dir)
+        if not local_dir:
+            self.ui(log.write_line, "Select a local directory first.")
+            return None
+        mapping = SyncMap(
+            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
+        )
+        return SyncEngine(self.s3_app.s3, mapping), log
+
+    def _run_preview(self, direction: Literal["push", "pull"]) -> None:
+        result = self._make_engine()
+        if not result:
+            return
+        engine, log = result
+        arrow = "▲" if direction == "push" else "▼"
+        status_fn = engine.status_push if direction == "push" else engine.status_pull
+        try:
+            actions = status_fn()
+            self.ui(log.clear)
+            if not actions:
+                self.ui(log.write_line, f"Nothing to {direction} — all in sync.")
+            else:
+                self.ui(
+                    log.write_line, f"{len(actions)} file(s) would be {direction}ed:"
+                )
+                for a in actions:
+                    self.ui(
+                        log.write_line, f"  {arrow} {a.relative_path}  ({a.reason})"
+                    )
+        except Exception as exc:
+            self.ui(log.write_line, f"Error: {exc}")
+
+    def _run_sync(self, direction: Literal["push", "pull"]) -> None:
+        result = self._make_engine()
+        if not result:
+            return
+        engine, log = result
+        arrow = "▲" if direction == "push" else "▼"
+        sync_fn = engine.push if direction == "push" else engine.pull
+        self.ui(log.write_line, f"{direction.capitalize()}ing...")
+        try:
+            actions = sync_fn(
+                callback=lambda a: self.ui(
+                    log.write_line, f"  {arrow} {a.relative_path}"
+                )
+            )
+            self.ui(log.write_line, f"Done — {len(actions)} file(s) {direction}ed.")
+            add_mapping(engine.mapping)
+            if direction == "push":
+                self._load_objects(engine.mapping.bucket)
+            else:
+                self.ui(self.query_one("#local-tree", DirectoryTree).reload)
+        except Exception as exc:
+            self.ui(log.write_line, f"Error: {exc}")
+
+    # --- preview ---
 
     @on(Button.Pressed, "#preview-push-btn")
     @work(thread=True, exclusive=True)
     def action_preview_push(self) -> None:
-        log = self._log()
-        bucket = self.ui(self._current_bucket)
-        if not bucket:
-            self.ui(log.write_line, "Select a bucket first.")
-            return
-        local_dir = self.ui(self._selected_local_dir)
-        if not local_dir:
-            self.ui(log.write_line, "Select a local directory first.")
-            return
-
-        mapping = SyncMap(
-            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
-        )
-        engine = SyncEngine(self.s3_app.s3, mapping)
-        try:
-            actions = engine.status_push()
-            self.ui(log.clear)
-            if not actions:
-                self.ui(log.write_line, "Nothing to push — all in sync.")
-            else:
-                self.ui(log.write_line, f"{len(actions)} file(s) would be pushed:")
-                for a in actions:
-                    self.ui(log.write_line, f"  ▲ {a.relative_path}  ({a.reason})")
-        except Exception as exc:
-            self.ui(log.write_line, f"Error: {exc}")
-
-    # --- preview pull ---
+        self._run_preview("push")
 
     @on(Button.Pressed, "#preview-pull-btn")
     @work(thread=True, exclusive=True)
     def action_preview_pull(self) -> None:
-        log = self._log()
-        bucket = self.ui(self._current_bucket)
-        if not bucket:
-            self.ui(log.write_line, "Select a bucket first.")
-            return
-        local_dir = self.ui(self._selected_local_dir)
-        if not local_dir:
-            self.ui(log.write_line, "Select a local directory first.")
-            return
-
-        mapping = SyncMap(
-            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
-        )
-        engine = SyncEngine(self.s3_app.s3, mapping)
-        try:
-            actions = engine.status_pull()
-            self.ui(log.clear)
-            if not actions:
-                self.ui(log.write_line, "Nothing to pull — all in sync.")
-            else:
-                self.ui(log.write_line, f"{len(actions)} file(s) would be pulled:")
-                for a in actions:
-                    self.ui(log.write_line, f"  ▼ {a.relative_path}  ({a.reason})")
-        except Exception as exc:
-            self.ui(log.write_line, f"Error: {exc}")
+        self._run_preview("pull")
 
     # --- upload ---
 
@@ -315,65 +333,17 @@ class FileManagerScreen(S3Screen):
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
 
-    # --- push all ---
+    # --- push / pull all ---
 
     @on(Button.Pressed, "#push-btn")
     @work(thread=True, exclusive=True)
     def action_push_all(self) -> None:
-        log = self._log()
-        bucket = self.ui(self._current_bucket)
-        if not bucket:
-            self.ui(log.write_line, "Select a bucket first.")
-            return
-        local_dir = self.ui(self._selected_local_dir)
-        if not local_dir:
-            self.ui(log.write_line, "Select a local directory first.")
-            return
-
-        mapping = SyncMap(
-            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
-        )
-        engine = SyncEngine(self.s3_app.s3, mapping)
-        self.ui(log.write_line, "Pushing...")
-        try:
-            actions = engine.push(
-                callback=lambda a: self.ui(log.write_line, f"  ▲ {a.relative_path}")
-            )
-            self.ui(log.write_line, f"Done — {len(actions)} file(s) pushed.")
-            add_mapping(mapping)
-            self._load_objects(bucket)
-        except Exception as exc:
-            self.ui(log.write_line, f"Error: {exc}")
-
-    # --- pull all ---
+        self._run_sync("push")
 
     @on(Button.Pressed, "#pull-btn")
     @work(thread=True, exclusive=True)
     def action_pull_all(self) -> None:
-        log = self._log()
-        bucket = self.ui(self._current_bucket)
-        if not bucket:
-            self.ui(log.write_line, "Select a bucket first.")
-            return
-        local_dir = self.ui(self._selected_local_dir)
-        if not local_dir:
-            self.ui(log.write_line, "Select a local directory first.")
-            return
-
-        mapping = SyncMap(
-            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
-        )
-        engine = SyncEngine(self.s3_app.s3, mapping)
-        self.ui(log.write_line, "Pulling...")
-        try:
-            actions = engine.pull(
-                callback=lambda a: self.ui(log.write_line, f"  ▼ {a.relative_path}")
-            )
-            self.ui(log.write_line, f"Done — {len(actions)} file(s) pulled.")
-            add_mapping(mapping)
-            self.ui(self.query_one("#local-tree", DirectoryTree).reload)
-        except Exception as exc:
-            self.ui(log.write_line, f"Error: {exc}")
+        self._run_sync("pull")
 
     # --- refresh / back ---
 

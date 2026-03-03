@@ -8,7 +8,6 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
 
-from minio.deleteobjects import DeleteObject
 from minio.error import S3Error
 
 from uw_s3.validators import BUCKET_NAME_RE
@@ -172,20 +171,7 @@ class BucketManagementScreen(S3Screen):
 
         self.ui(status.update, f"Removing all objects from '{bucket_name}'...")
         try:
-            objects = list(
-                self.s3_app.s3.client.list_objects(bucket_name, recursive=True)
-            )
-            if objects:
-                delete_list = [DeleteObject(obj.object_name) for obj in objects]
-                errors = list(
-                    self.s3_app.s3.client.remove_objects(bucket_name, delete_list)
-                )
-                if errors:
-                    self.ui(
-                        status.update,
-                        f"Error removing objects: {errors[0].message}",
-                    )
-                    return
+            self.s3_app.s3.empty_bucket(bucket_name)
             self.s3_app.s3.delete_bucket(bucket_name)
             self.ui(status.update, f"Bucket '{bucket_name}' and all objects deleted.")
             self.ui(table.remove_row, row_key)

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from uw_s3 import UWS3
 from uw_s3.sync.models import SyncMap
@@ -13,7 +14,7 @@ class SyncAction:
     """A single file to transfer."""
 
     relative_path: str
-    direction: str  # "push" or "pull"
+    direction: Literal["push", "pull"]
     reason: str  # e.g. "missing on S3", "size differs"
 
 

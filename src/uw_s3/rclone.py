@@ -44,6 +44,7 @@ class RcloneMount:
         )
         fd, path = tempfile.mkstemp(prefix="uw-s3-rclone-", suffix=".conf")
         try:
+            os.fchmod(fd, 0o600)
             os.write(fd, content.encode())
         finally:
             os.close(fd)

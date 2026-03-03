@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from minio import Minio
+from minio.deleteobjects import DeleteObject
 
 
 @dataclass
@@ -93,8 +94,25 @@ class UWS3:
         """Create a new bucket."""
         self.client.make_bucket(bucket)
 
+    def empty_bucket(self, bucket: str) -> None:
+        """Delete all objects in a bucket."""
+        objects = list(self.client.list_objects(bucket, recursive=True))
+        if objects:
+            errors = list(
+                self.client.remove_objects(
+                    bucket, [DeleteObject(obj.object_name) for obj in objects]
+                )
+            )
+            if errors:
+                raise RuntimeError(f"Failed to delete objects: {errors[0].message}")
+
     def set_bucket_policy(self, bucket: str, permission: str) -> None:
         """Set bucket access policy: 'private', 'public-read', or 'public-readwrite'."""
+        valid = {"private", "public-read", "public-readwrite"}
+        if permission not in valid:
+            raise ValueError(
+                f"Unknown permission {permission!r}, must be one of {valid}"
+            )
         if permission == "private":
             self.client.delete_bucket_policy(bucket)
             return

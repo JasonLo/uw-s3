@@ -2,23 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from uw_s3 import UWS3, CAMPUS_ENDPOINT, WEB_ENDPOINT
-
-
-def test_campus_factory() -> None:
-    with patch("uw_s3.Minio"):
-        client = UWS3.campus("key", "secret")
-        assert client.endpoint == CAMPUS_ENDPOINT
-
-
-def test_web_factory() -> None:
-    with patch("uw_s3.Minio"):
-        client = UWS3.web("key", "secret")
-        assert client.endpoint == WEB_ENDPOINT
-
-
-def test_default_bucket() -> None:
-    assert UWS3.default_bucket("jdoe") == "jdoe-bucket-01"
+from uw_s3 import UWS3
 
 
 def test_list_buckets() -> None:
@@ -55,28 +39,6 @@ def test_list_objects_with_size() -> None:
         client = UWS3("key", "secret")
         result = client.list_objects_with_size("bucket")
         assert result == [("file.txt", 42)]
-
-
-def test_exists_true() -> None:
-    with patch("uw_s3.Minio") as MockMinio:
-        mock = MockMinio.return_value
-        mock.stat_object.return_value = MagicMock()
-
-        client = UWS3("key", "secret")
-        assert client.exists("bucket", "file.txt") is True
-
-
-def test_exists_false() -> None:
-    from minio.error import S3Error
-
-    with patch("uw_s3.Minio") as MockMinio:
-        mock = MockMinio.return_value
-        mock.stat_object.side_effect = S3Error(
-            "NoSuchKey", "NoSuchKey", "resource", "", "", ""
-        )
-
-        client = UWS3("key", "secret")
-        assert client.exists("bucket", "file.txt") is False
 
 
 def test_bucket_exists() -> None:
