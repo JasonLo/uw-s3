@@ -4,12 +4,16 @@ import atexit
 import os
 import signal
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+CONFIG_DIR = Path.home() / ".config" / "uw-s3"
 
 
 def main() -> None:
     load_dotenv()
+    load_dotenv(CONFIG_DIR / ".env")
 
     access_key = os.getenv("S3_ACCESS_KEY_ID", "")
     secret_key = os.getenv("S3_SECRET_ACCESS_KEY", "")

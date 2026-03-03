@@ -4,24 +4,35 @@ Terminal UI for UW-Madison Research Object Storage (S3). Wraps the MinIO Python 
 
 ## Install
 
-Requires Python >= 3.14 and [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync          # install dependencies
-uv run uw-s3     # launch the TUI
+curl -LsSf https://raw.githubusercontent.com/jasonlo/uw-s3/main/scripts/install.sh | sh
 ```
 
-For mounting buckets, [rclone](https://rclone.org/install/) must be on your PATH.
+The installer will set up `uw-s3`, prompt for your S3 credentials, and optionally install rclone for mount support.
 
-## Configuration
+Once installed, run from anywhere:
 
-Copy `.env.example` to `.env` and fill in your credentials:
+```bash
+uw-s3
+```
+
+### Manual install
+
+```bash
+uv tool install git+https://github.com/jasonlo/uw-s3.git --python 3.14
+```
+
+Then create `~/.config/uw-s3/.env` with your credentials:
 
 ```
 S3_ACCESS_KEY_ID=your_key
 S3_SECRET_ACCESS_KEY=your_secret
 S3_ENDPOINT=campus  # "campus" (UW network/VPN, default) or "web" (any network)
 ```
+
+For mounting buckets, [rclone](https://rclone.org/install/) must be on your PATH.
 
 ## Usage
 
