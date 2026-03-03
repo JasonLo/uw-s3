@@ -17,7 +17,7 @@ echo
 if [ -f "$ENV_FILE" ]; then
     echo "Credentials already configured at $ENV_FILE"
     printf "Overwrite? (y/N): "
-    read -r overwrite
+    read -r overwrite < /dev/tty
     case "$overwrite" in
         [Yy]) ;;
         *)
@@ -35,23 +35,23 @@ echo
 
 while true; do
     printf "Access Key ID: "
-    read -r access_key
+    read -r access_key < /dev/tty
     [ -n "$access_key" ] && break
     echo "Access key cannot be empty."
 done
 
 while true; do
     printf "Secret Access Key: "
-    stty -echo
-    read -r secret_key
-    stty echo
+    stty -echo < /dev/tty
+    read -r secret_key < /dev/tty
+    stty echo < /dev/tty
     echo
     [ -n "$secret_key" ] && break
     echo "Secret key cannot be empty."
 done
 
 printf "Endpoint — campus (UW VPN) or web (any network) [campus]: "
-read -r endpoint
+read -r endpoint < /dev/tty
 endpoint=${endpoint:-campus}
 
 mkdir -p "$CONFIG_DIR"
@@ -70,7 +70,7 @@ if command -v rclone >/dev/null 2>&1; then
     echo "rclone found (mount support available)."
 else
     printf "Install rclone for mount support? (y/N): "
-    read -r install_rclone
+    read -r install_rclone < /dev/tty
     case "$install_rclone" in
         [Yy]) sudo -v && curl https://rclone.org/install.sh | sudo bash ;;
         *) echo "Skipping rclone (mount feature will be unavailable)." ;;
