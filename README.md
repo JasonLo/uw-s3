@@ -10,7 +10,9 @@ Requires [uv](https://docs.astral.sh/uv/).
 curl -LsSf https://raw.githubusercontent.com/jasonlo/uw-s3/main/scripts/install.sh | sh
 ```
 
-The installer will set up `uw-s3`, prompt for your S3 credentials, and optionally install rclone for mount support.
+The installer will set up `uw-s3`, securely prompt for your S3 credentials, and optionally install rclone for mount support.
+
+**Security:** Credentials are stored securely using your system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker) or an encrypted file if keyring is unavailable. Both access key and secret key input are hidden during installation.
 
 Once installed, run from anywhere:
 
@@ -24,15 +26,25 @@ uw-s3
 uv tool install git+https://github.com/jasonlo/uw-s3.git --python 3.14
 ```
 
-Then create `~/.config/uw-s3/.env` with your credentials:
+Then run the installer to set up credentials, or manually configure them:
 
-```
-S3_ACCESS_KEY_ID=your_key
-S3_SECRET_ACCESS_KEY=your_secret
-S3_ENDPOINT=campus  # "campus" (UW network/VPN, default) or "web" (any network)
+```bash
+# Via installer (recommended)
+curl -LsSf https://raw.githubusercontent.com/jasonlo/uw-s3/main/scripts/install.sh | sh
+
+# Or manually store credentials
+python3 -c "from uw_s3.credentials import CredentialManager; CredentialManager().store_credentials('your_access_key', 'your_secret_key', 'campus')"
 ```
 
 For mounting buckets, [rclone](https://rclone.org/install/) must be on your PATH.
+
+### Migrating from older versions
+
+If you have an existing `.env` file from a previous version, credentials will be automatically migrated to secure storage on first run. You can also manually migrate:
+
+```bash
+uv run python scripts/migrate_credentials.py
+```
 
 ## Usage
 

@@ -19,7 +19,7 @@ uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the
 
 ```bash
 uv sync                  # Install dependencies
-uv run uw-s3             # Run the TUI (requires .env with S3 credentials)
+uv run uw-s3             # Run the TUI (requires credentials in secure storage)
 uv run pytest            # Run tests
 uv run pytest -k "name"  # Run a single test by name
 uv run ruff check .      # Lint
@@ -30,14 +30,17 @@ Requires Python >=3.14 and `uv` as the package manager.
 
 ## Credentials
 
-The app reads `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `.env` (via python-dotenv). Optional `S3_ENDPOINT` can be `campus` (default, UW network/VPN) or `web` (public).
+Credentials are stored securely using the system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker) with an encrypted file fallback if keyring is unavailable. The `CredentialManager` class in `src/uw_s3/credentials.py` handles storage and retrieval.
+
+Legacy `.env` files are automatically migrated to secure storage on first run. For backward compatibility, environment variables `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and `S3_ENDPOINT` are still supported and will be stored in secure storage if found.
 
 ## Architecture
 
 ```
 src/uw_s3/
 ├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
-├── cli.py               # Entry point: loads .env, creates UWS3App, calls app.run()
+├── cli.py               # Entry point: loads credentials, creates UWS3App, calls app.run()
+├── credentials.py       # CredentialManager — secure storage using keyring or encrypted file
 ├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
@@ -60,6 +63,7 @@ src/uw_s3/
 ## Key Patterns
 
 - **Two S3 endpoints:** `campus.s3.wisc.edu` (UW VPN) and `web.s3.wisc.edu` (public). Switchable at runtime via main menu.
+- **Secure credential storage:** Credentials use system keyring (primary) or encrypted file (fallback). Machine-specific encryption via PBKDF2. Auto-migration from legacy `.env` files.
 - **Textual threading:** All S3 I/O in screens uses `@work(thread=True)` with `call_from_thread()` for UI updates.
 - **Screen navigation:** `push_screen()` / `pop_screen()` with `Binding("escape", "pop_screen", "Back")` on sub-screens.
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.

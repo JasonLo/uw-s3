@@ -3,7 +3,6 @@ set -eu
 
 REPO="git+https://github.com/jasonlo/uw-s3.git"
 CONFIG_DIR="$HOME/.config/uw-s3"
-ENV_FILE="$CONFIG_DIR/.env"
 
 echo "=== uw-s3 installer ==="
 echo
@@ -13,9 +12,9 @@ echo "Installing uw-s3..."
 uv tool install "$REPO" --python 3.14
 echo
 
-# Set up credentials
-if [ -f "$ENV_FILE" ]; then
-    echo "Credentials already configured at $ENV_FILE"
+# Check if credentials already exist
+if uv tool run uw-s3 --check-credentials 2>/dev/null; then
+    echo "Credentials already configured."
     printf "Overwrite? (y/N): "
     read -r overwrite < /dev/tty
     case "$overwrite" in
@@ -35,7 +34,10 @@ echo
 
 while true; do
     printf "Access Key ID: "
+    stty -echo < /dev/tty
     read -r access_key < /dev/tty
+    stty echo < /dev/tty
+    echo
     [ -n "$access_key" ] && break
     echo "Access key cannot be empty."
 done
@@ -57,18 +59,24 @@ printf "Choose endpoint [campus]: "
 read -r endpoint < /dev/tty
 endpoint=${endpoint:-campus}
 
-mkdir -p "$CONFIG_DIR"
-cat > "$ENV_FILE" <<EOF
-S3_ACCESS_KEY_ID=$access_key
-S3_SECRET_ACCESS_KEY=$secret_key
-S3_ENDPOINT=$endpoint
+# Store credentials using Python script
+python3 <<EOF
+import sys
+sys.path.insert(0, "$HOME/.local/share/uv/tools/uw-s3/lib/python*/site-packages")
+from uw_s3.credentials import CredentialManager
+
+manager = CredentialManager()
+manager.store_credentials(
+    access_key="$access_key",
+    secret_key="$secret_key",
+    endpoint="$endpoint"
+)
+print(f"\nCredentials stored securely using {manager.storage_method}.")
 EOF
-chmod 600 "$ENV_FILE"
+
 echo
-echo "Credentials saved to $ENV_FILE"
 
 # Optional: install rclone for mount support
-echo
 if command -v rclone >/dev/null 2>&1; then
     echo "rclone found (mount support available)."
 else
