@@ -20,9 +20,13 @@ uw-s3 = "uw_s3.cli:main"
 requires = ["uv_build>=0.10.2,<0.11.0"]
 build-backend = "uv_build"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
     "ruff>=0.15.4",
     "ty>=0.0.20",
 ]

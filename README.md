@@ -41,7 +41,7 @@ uv run ruff check .      # lint
 uv run ruff format .     # format
 ```
 
-## Docs
+## Reference
 
-- <https://kb.wisc.edu/researchdata/134019>
-- <https://kb.wisc.edu/researchdata/134396>
+- [S3 Getting Started](https://kb.wisc.edu/researchdata/134019)
+- [Bucket Creation & Configuration](https://kb.wisc.edu/researchdata/134396)

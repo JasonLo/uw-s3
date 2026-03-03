@@ -62,7 +62,7 @@ src/uw_s3/
 - **Two S3 endpoints:** `campus.s3.wisc.edu` (UW VPN) and `web.s3.wisc.edu` (public). Switchable at runtime via main menu.
 - **Textual threading:** All S3 I/O in screens uses `@work(thread=True)` with `call_from_thread()` for UI updates.
 - **Screen navigation:** `push_screen()` / `pop_screen()` with `Binding("escape", "pop_screen", "Back")` on sub-screens.
-- **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Global styles in `app.py` CSS.
+- **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.
 - **Sync comparison:** Size-based only (not content hashes). `SyncEngine.status_push/pull()` for dry-run, `.push()/.pull()` for execution.
 - **Mount cleanup:** `UWS3App.on_unmount()` terminates all rclone subprocesses and removes temp config files on exit.
 - **rclone is external:** Not a Python dependency — must be on PATH. The mount screen checks `shutil.which("rclone")` and disables mount if missing.

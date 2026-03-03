@@ -105,7 +105,9 @@ def test_pull_calls_download(tmp_path: Path) -> None:
 
     actions = engine.pull()
     assert len(actions) == 1
-    client.download_file.assert_called_once()
+    client.download_file.assert_called_once_with(
+        "test-bucket", "remote.txt", tmp_path / "remote.txt"
+    )
 
 
 def test_push_with_prefix(tmp_path: Path) -> None:
@@ -146,3 +148,45 @@ def test_nested_files(tmp_path: Path) -> None:
     actions = engine.status_push()
     assert len(actions) == 1
     assert actions[0].relative_path == "a/b/deep.txt"
+
+
+def test_pull_creates_nested_dirs(tmp_path: Path) -> None:
+    client = _mock_client([("x/y/deep.txt", 10)])
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(client, mapping)
+
+    engine.pull()
+    client.download_file.assert_called_once_with(
+        "b", "x/y/deep.txt", tmp_path / "x" / "y" / "deep.txt"
+    )
+    assert (tmp_path / "x" / "y").is_dir()
+
+
+def test_status_push_empty_local_dir(tmp_path: Path) -> None:
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(_mock_client([("remote.txt", 5)]), mapping)
+
+    assert engine.status_push() == []
+
+
+def test_pull_callback(tmp_path: Path) -> None:
+    client = _mock_client([("file.txt", 7)])
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(client, mapping)
+
+    called: list[SyncAction] = []
+    engine.pull(callback=called.append)
+    assert len(called) == 1
+    assert called[0].relative_path == "file.txt"
+    assert called[0].direction == "pull"
+
+
+def test_pull_with_prefix(tmp_path: Path) -> None:
+    client = _mock_client([("data/file.txt", 3)])
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b", prefix="data")
+    engine = SyncEngine(client, mapping)
+
+    engine.pull()
+    client.download_file.assert_called_once_with(
+        "b", "data/file.txt", tmp_path / "file.txt"
+    )
