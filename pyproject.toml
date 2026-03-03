@@ -12,7 +12,6 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "textual>=4.0.0",
     "keyring>=25.0.0",
-    "cryptography>=43.0.0",
 ]
 
 [project.scripts]

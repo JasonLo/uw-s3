@@ -71,7 +71,7 @@ manager.store_credentials(
     secret_key="$secret_key",
     endpoint="$endpoint"
 )
-print(f"\nCredentials stored securely using {manager.storage_method}.")
+print("\nCredentials stored securely in system keyring.")
 EOF
 
 echo

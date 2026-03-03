@@ -12,7 +12,7 @@ curl -LsSf https://raw.githubusercontent.com/jasonlo/uw-s3/main/scripts/install.
 
 The installer will set up `uw-s3`, securely prompt for your S3 credentials, and optionally install rclone for mount support.
 
-**Security:** Credentials are stored securely using your system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker) or an encrypted file if keyring is unavailable. Both access key and secret key input are hidden during installation.
+**Security:** Credentials are stored securely using your system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker). Both access key and secret key input are hidden during installation.
 
 Once installed, run from anywhere:
 

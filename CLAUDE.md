@@ -30,7 +30,7 @@ Requires Python >=3.14 and `uv` as the package manager.
 
 ## Credentials
 
-Credentials are stored securely using the system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker) with an encrypted file fallback if keyring is unavailable. The `CredentialManager` class in `src/uw_s3/credentials.py` handles storage and retrieval.
+Credentials are stored securely using the system's native keyring (macOS Keychain, Linux Secret Service, Windows Credential Locker). The `CredentialManager` class in `src/uw_s3/credentials.py` handles storage and retrieval.
 
 Legacy `.env` files are automatically migrated to secure storage on first run. For backward compatibility, environment variables `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and `S3_ENDPOINT` are still supported and will be stored in secure storage if found.
 
@@ -40,7 +40,7 @@ Legacy `.env` files are automatically migrated to secure storage on first run. F
 src/uw_s3/
 ├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
 ├── cli.py               # Entry point: loads credentials, creates UWS3App, calls app.run()
-├── credentials.py       # CredentialManager — secure storage using keyring or encrypted file
+├── credentials.py       # CredentialManager — secure storage using system keyring
 ├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
@@ -63,7 +63,7 @@ src/uw_s3/
 ## Key Patterns
 
 - **Two S3 endpoints:** `campus.s3.wisc.edu` (UW VPN) and `web.s3.wisc.edu` (public). Switchable at runtime via main menu.
-- **Secure credential storage:** Credentials use system keyring (primary) or encrypted file (fallback). Machine-specific encryption via PBKDF2. Auto-migration from legacy `.env` files.
+- **Secure credential storage:** Credentials use system keyring. Auto-migration from legacy `.env` files.
 - **Textual threading:** All S3 I/O in screens uses `@work(thread=True)` with `call_from_thread()` for UI updates.
 - **Screen navigation:** `push_screen()` / `pop_screen()` with `Binding("escape", "pop_screen", "Back")` on sub-screens.
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.

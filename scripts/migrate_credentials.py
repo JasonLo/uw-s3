@@ -19,7 +19,7 @@ def main() -> None:
     print()
 
     if manager.has_credentials():
-        print(f"Credentials already exist in secure storage ({manager.storage_method}).")
+        print("Credentials already exist in system keyring.")
         response = input("Overwrite with credentials from .env? (y/N): ").strip().lower()
         if response != "y":
             print("Migration cancelled.")
@@ -29,7 +29,7 @@ def main() -> None:
 
     print("Migrating credentials from .env file...")
     if migrate_from_env():
-        print(f"✓ Successfully migrated credentials to secure storage ({manager.storage_method}).")
+        print("✓ Successfully migrated credentials to system keyring.")
         print()
         print("The old .env file has been renamed to .env.backup for safety.")
         print("You can delete it once you've verified the migration works.")

@@ -25,7 +25,7 @@ def main() -> None:
     if not manager.has_credentials():
         if migrate_from_env():
             print(
-                f"Migrated credentials from .env to secure storage ({manager.storage_method}).",
+                "Migrated credentials from .env to system keyring.",
                 file=sys.stderr,
             )
         else:
@@ -49,7 +49,7 @@ def main() -> None:
             endpoint_typed = "web" if endpoint_env == "web" else "campus"
             manager.store_credentials(access_key, secret_key, endpoint_typed)
             print(
-                f"Stored credentials in secure storage ({manager.storage_method}).",
+                "Stored credentials in system keyring.",
                 file=sys.stderr,
             )
 
