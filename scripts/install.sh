@@ -1,5 +1,5 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 REPO="git+https://github.com/jasonlo/uw-s3.git"
 CONFIG_DIR="$HOME/.config/uw-s3"
@@ -16,13 +16,17 @@ echo
 # Set up credentials
 if [ -f "$ENV_FILE" ]; then
     echo "Credentials already configured at $ENV_FILE"
-    read -rp "Overwrite? (y/N): " overwrite
-    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
-        echo "Keeping existing credentials."
-        echo
-        echo "Done! Run 'uw-s3' to start."
-        exit 0
-    fi
+    printf "Overwrite? (y/N): "
+    read -r overwrite
+    case "$overwrite" in
+        [Yy]) ;;
+        *)
+            echo "Keeping existing credentials."
+            echo
+            echo "Done! Run 'uw-s3' to start."
+            exit 0
+            ;;
+    esac
 fi
 
 echo "Enter your UW Research Object Storage credentials."
@@ -30,19 +34,24 @@ echo "Get them from https://storage.researchdata.wisc.edu"
 echo
 
 while true; do
-    read -rp "Access Key ID: " access_key
+    printf "Access Key ID: "
+    read -r access_key
     [ -n "$access_key" ] && break
     echo "Access key cannot be empty."
 done
 
 while true; do
-    read -rsp "Secret Access Key: " secret_key
+    printf "Secret Access Key: "
+    stty -echo
+    read -r secret_key
+    stty echo
     echo
     [ -n "$secret_key" ] && break
     echo "Secret key cannot be empty."
 done
 
-read -rp "Endpoint — campus (UW VPN) or web (any network) [campus]: " endpoint
+printf "Endpoint — campus (UW VPN) or web (any network) [campus]: "
+read -r endpoint
 endpoint=${endpoint:-campus}
 
 mkdir -p "$CONFIG_DIR"
@@ -57,15 +66,15 @@ echo "Credentials saved to $ENV_FILE"
 
 # Optional: install rclone for mount support
 echo
-if command -v rclone &>/dev/null; then
+if command -v rclone >/dev/null 2>&1; then
     echo "rclone found (mount support available)."
 else
-    read -rp "Install rclone for mount support? (y/N): " install_rclone
-    if [[ "$install_rclone" =~ ^[Yy]$ ]]; then
-        sudo -v && curl https://rclone.org/install.sh | sudo bash
-    else
-        echo "Skipping rclone (mount feature will be unavailable)."
-    fi
+    printf "Install rclone for mount support? (y/N): "
+    read -r install_rclone
+    case "$install_rclone" in
+        [Yy]) sudo -v && curl https://rclone.org/install.sh | sudo bash ;;
+        *) echo "Skipping rclone (mount feature will be unavailable)." ;;
+    esac
 fi
 
 echo
