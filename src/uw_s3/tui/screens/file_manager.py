@@ -120,7 +120,7 @@ class FileManagerScreen(S3Screen):
             prev = self.ui(lambda: sel.value)
             self.ui(setattr, sel, "prompt", "Select a bucket")
             self.ui(sel.set_options, options)
-            if prev is not Select.BLANK and str(prev) in buckets:
+            if prev is not Select.NULL and str(prev) in buckets:
                 self.ui(setattr, sel, "value", prev)
         except Exception as exc:
             log = self.query_one("#log", Log)
@@ -172,7 +172,7 @@ class FileManagerScreen(S3Screen):
 
     @on(Select.Changed, "#bucket-select")
     def handle_bucket_changed(self, event: Select.Changed) -> None:
-        if event.value is not Select.BLANK:
+        if event.value is not Select.NULL:
             self._selected_s3_key = ""
             self._load_objects(str(event.value))
 
@@ -180,7 +180,7 @@ class FileManagerScreen(S3Screen):
 
     def _current_bucket(self) -> str | None:
         val = self.query_one("#bucket-select", Select).value
-        if val is Select.BLANK:
+        if val is Select.NULL:
             return None
         return str(val)
 

@@ -37,7 +37,8 @@ The app reads `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `.env` (via pyt
 ```
 src/uw_s3/
 ├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
-├── cli.py               # Entry point: loads .env, creates UWS3App, calls app.run()
+├── cli.py               # Entry point: loads .env, checks for updates, creates UWS3App, calls app.run()
+├── updater.py           # Auto-update — compares installed version against latest GitHub tag
 ├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
