@@ -26,6 +26,10 @@ def main() -> None:
         )
         sys.exit(1)
 
+    from uw_s3.updater import check_and_update
+
+    check_and_update()
+
     from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT
     from uw_s3.tui.app import UWS3App
 
