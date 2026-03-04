@@ -46,6 +46,7 @@ class FileManagerScreen(S3Screen):
         Binding("L", "pull_all", "Pull All", key_display="shift+l"),
         Binding("r", "refresh", "Refresh"),
         Binding("escape", "pop_screen", "Back"),
+        Binding("q", "pop_screen", "Back"),
     ]
 
     CSS = """

@@ -6,7 +6,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
+from textual.widgets import Button, Collapsible, DataTable, Footer, Header, Input, Label, Select
 
 from minio.error import S3Error
 
@@ -29,6 +29,7 @@ class BucketManagementScreen(S3Screen):
 
     BINDINGS = [
         Binding("escape", "pop_screen", "Back"),
+        Binding("q", "pop_screen", "Back"),
         Binding("r", "refresh", "Refresh"),
         Binding("delete", "delete_bucket", "Delete"),
     ]
@@ -36,26 +37,22 @@ class BucketManagementScreen(S3Screen):
     CSS = """
     #bucket-table {
         height: 1fr;
-        margin: 1 2 0 2;
+        margin: 0 2;
         border: round $accent;
     }
     #action-row {
         height: auto;
-        padding: 1 2;
+        padding: 0 2;
     }
     #action-row Button {
         margin-right: 1;
     }
+    #create-collapsible {
+        margin: 0 2;
+    }
     #create-form {
         height: auto;
-        margin: 0 2;
-        padding: 1 2;
-        background: $boost;
-        border: round $primary;
-    }
-    #create-form .title {
-        text-style: bold;
-        margin-bottom: 1;
+        padding: 0 1;
     }
     #create-form Label {
         margin-top: 1;
@@ -64,7 +61,7 @@ class BucketManagementScreen(S3Screen):
         margin-top: 1;
     }
     #status {
-        margin: 0 2 1 2;
+        margin: 0 2;
         height: auto;
         min-height: 1;
         padding: 0 1;
@@ -78,18 +75,18 @@ class BucketManagementScreen(S3Screen):
         with Horizontal(id="action-row"):
             yield Button("Delete Selected", variant="error", id="delete_btn")
             yield Button("Refresh", variant="default", id="refresh_btn")
-        with Vertical(id="create-form"):
-            yield Label("Create Bucket", classes="title")
-            yield Label("Bucket Name")
-            yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
-            yield Label("Permission")
-            yield Select(
-                PERMISSION_OPTIONS,
-                value="private",
-                id="permission",
-                allow_blank=False,
-            )
-            yield Button("Create Bucket", variant="primary", id="create_btn")
+        with Collapsible(title="Create Bucket", collapsed=True, id="create-collapsible"):
+            with Vertical(id="create-form"):
+                yield Label("Bucket Name")
+                yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
+                yield Label("Permission")
+                yield Select(
+                    PERMISSION_OPTIONS,
+                    value="private",
+                    id="permission",
+                    allow_blank=False,
+                )
+                yield Button("Create Bucket", variant="primary", id="create_btn")
         yield Label("", id="status")
         yield Footer()
 
@@ -207,5 +204,4 @@ class BucketManagementScreen(S3Screen):
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
 
-    def action_pop_screen(self) -> None:
-        self.app.pop_screen()
+

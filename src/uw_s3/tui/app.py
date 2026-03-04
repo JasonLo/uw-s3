@@ -41,11 +41,14 @@ class UWS3App(App):
         self.sub_title = f"Endpoint: {self.endpoint_label}"
         self.push_screen(MainMenuScreen())
 
-    def on_unmount(self) -> None:
-        """Clean up any active rclone mounts when the app exits."""
+    def cleanup_mounts(self) -> None:
+        """Terminate all rclone subprocesses and remove temp configs."""
         for rm in self.active_mounts.values():
             try:
                 rm.unmount()
             except Exception:
                 pass
         self.active_mounts.clear()
+
+    def on_unmount(self) -> None:
+        self.cleanup_mounts()

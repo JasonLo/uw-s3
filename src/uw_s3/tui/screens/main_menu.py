@@ -1,5 +1,8 @@
 """Main menu screen."""
 
+import os
+import threading
+
 from rich.console import Group
 from rich.text import Text
 
@@ -97,10 +100,14 @@ class MainMenuScreen(S3Screen):
 
         self.app.push_screen(BucketManagementScreen())
 
+    def action_quit(self) -> None:
+        self.s3_app.cleanup_mounts()
+        self.app.exit()
+        threading.Timer(1.0, os._exit, args=(0,)).start()
+
     def action_mount_bucket(self) -> None:
         from uw_s3.tui.screens.mount import MountScreen
 
         self.app.push_screen(MountScreen())
 
-    def action_quit(self) -> None:
-        self.app.exit()
+

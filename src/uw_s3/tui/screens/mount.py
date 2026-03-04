@@ -38,7 +38,10 @@ def _ensure_mount_root() -> Path:
 class MountScreen(S3Screen):
     """Mount an S3 bucket as a local directory using rclone."""
 
-    BINDINGS = [Binding("escape", "pop_screen", "Back")]
+    BINDINGS = [
+        Binding("escape", "pop_screen", "Back"),
+        Binding("q", "pop_screen", "Back"),
+    ]
 
     CSS = """
     #active-mounts-panel { height: auto; max-height: 12; margin: 1 2 0 2; background: $boost; border: round $accent; padding: 1; }

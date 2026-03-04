@@ -18,8 +18,8 @@ class EndpointBar(Static, can_focus=True):
     DEFAULT_CSS = """
     EndpointBar {
         height: auto;
-        padding: 1 2;
-        margin: 1 2 0 2;
+        padding: 0 2;
+        margin: 0 2;
         background: $boost;
         border: round $primary;
     }
@@ -35,7 +35,9 @@ class EndpointBar(Static, can_focus=True):
 class S3Screen(Screen):
     """Screen with typed access to UWS3App and a threading shorthand."""
 
-    BINDINGS = [Binding("e", "switch_endpoint", "Switch Endpoint")]
+    BINDINGS = [
+        Binding("e", "switch_endpoint", "Switch Endpoint"),
+    ]
 
     @property
     def s3_app(self) -> UWS3App:
@@ -45,7 +47,14 @@ class S3Screen(Screen):
 
     def ui(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         """Call a function on the main thread from a worker."""
-        return self.app.call_from_thread(fn, *args, **kwargs)
+        try:
+            return self.app.call_from_thread(fn, *args, **kwargs)
+        except Exception:
+            return None
+
+    def action_pop_screen(self) -> None:
+        self.workers.cancel_all()
+        self.app.pop_screen()
 
     def _update_endpoint_bar(self) -> None:
         try:
