@@ -13,7 +13,6 @@ from textual.widgets import (
     DirectoryTree,
     Footer,
     Header,
-    Label,
     Log,
     Select,
 )
@@ -50,17 +49,17 @@ class FileManagerScreen(S3Screen):
     ]
 
     CSS = """
-    #bucket-bar { height: auto; padding: 1 2; margin: 1 2 0 2; background: $boost; border: round $primary; }
-    #bucket-bar Horizontal { height: auto; align: left middle; }
-    #bucket-bar Label { margin: 0 1 0 0; }
-    #bucket-bar Select { width: 40; }
-    #bucket-info { margin-left: 2; }
+    #bucket-bar { height: auto; margin: 0 2; align: left middle; }
+    #bucket-bar Select { width: 40; border: round $accent; border-title-align: left; padding: 0 1; }
+
     #panes { height: 1fr; margin: 1 2 0 2; }
     #local-tree { width: 1fr; height: 1fr; margin-right: 1; border: round $accent; }
     #s3-pane { width: 1fr; height: 1fr; border: round $accent; }
     #s3-table { height: 1fr; }
-    #action-bar { height: auto; padding: 1 2; }
+    #action-bar { height: auto; margin: 0 2; }
     #action-bar Button { margin-right: 1; }
+    .action-group { width: 1fr; height: auto; }
+    .action-group-right { margin-left: 1; }
     #log { height: 10; margin: 0 2 1 2; border: round $panel; }
     """
 
@@ -70,11 +69,12 @@ class FileManagerScreen(S3Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield EndpointBar()
-        with Vertical(id="bucket-bar"):
-            with Horizontal():
-                yield Label("[bold]Bucket:[/]")
-                yield Select([], id="bucket-select", prompt="Loading buckets...")
-                yield Label("", id="bucket-info")
+        with Horizontal(id="bucket-bar"):
+            sel = Select(
+                [], id="bucket-select", prompt="Loading buckets...", compact=True
+            )
+            sel.border_title = "Bucket"
+            yield sel
         with Horizontal(id="panes"):
             tree = DirectoryTree(".", id="local-tree")
             tree.border_title = "Local Files"
@@ -83,12 +83,14 @@ class FileManagerScreen(S3Screen):
                 pane.border_title = "S3 Objects"
                 yield DataTable(id="s3-table")
         with Horizontal(id="action-bar"):
-            yield Button("Upload [u]", id="upload-btn")
-            yield Button("Download [d]", id="download-btn")
-            yield Button("Preview Push [p]", id="preview-push-btn")
-            yield Button("Preview Pull [l]", id="preview-pull-btn")
-            yield Button("Push All [P]", variant="primary", id="push-btn")
-            yield Button("Pull All [L]", variant="success", id="pull-btn")
+            with Horizontal(classes="action-group"):
+                yield Button("Upload [u]", id="upload-btn")
+                yield Button("Preview Push [p]", id="preview-push-btn")
+                yield Button("Push All [P]", variant="primary", id="push-btn")
+            with Horizontal(classes="action-group action-group-right"):
+                yield Button("Download [d]", id="download-btn")
+                yield Button("Preview Pull [l]", id="preview-pull-btn")
+                yield Button("Pull All [L]", variant="success", id="pull-btn")
         log = Log(id="log", max_lines=100)
         log.border_title = "Output"
         yield log
@@ -120,8 +122,6 @@ class FileManagerScreen(S3Screen):
             self.ui(sel.set_options, options)
             if prev is not Select.BLANK and str(prev) in buckets:
                 self.ui(setattr, sel, "value", prev)
-            info = self.query_one("#bucket-info", Label)
-            self.ui(info.update, f"[dim]{len(buckets)} bucket(s)[/]")
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading buckets: {exc}")
@@ -147,9 +147,6 @@ class FileManagerScreen(S3Screen):
                 table.add_column("Last Modified", key="modified")
                 for name, size, mod in rows:
                     table.add_row(name, size, mod, key=name)
-                self.query_one("#bucket-info", Label).update(
-                    f"[dim]{len(rows)} object(s)[/]"
-                )
 
             self.ui(_rebuild_table)
         except Exception as exc:

@@ -50,18 +50,10 @@ while true; do
     echo "Secret key cannot be empty."
 done
 
-echo "Endpoint:"
-echo "  campus — faster, but requires UW network or VPN (will hang otherwise)"
-echo "  web    — works from any network"
-printf "Choose endpoint [campus]: "
-read -r endpoint < /dev/tty
-endpoint=${endpoint:-campus}
-
 mkdir -p "$CONFIG_DIR"
 cat > "$ENV_FILE" <<EOF
 S3_ACCESS_KEY_ID=$access_key
 S3_SECRET_ACCESS_KEY=$secret_key
-S3_ENDPOINT=$endpoint
 EOF
 chmod 600 "$ENV_FILE"
 echo

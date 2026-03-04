@@ -6,7 +6,8 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Collapsible, DataTable, Footer, Header, Input, Label, Select
+from textual.screen import Screen
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
 
 from minio.error import S3Error
 
@@ -22,6 +23,59 @@ PERMISSION_OPTIONS: list[tuple[str, str]] = [
     ("Public Read", "public-read"),
     ("Public Read/Write (not recommended)", "public-readwrite"),
 ]
+
+
+class CreateBucketScreen(Screen[tuple[str, str] | None]):
+    """Modal dialog for creating a new bucket."""
+
+    CSS = """
+    CreateBucketScreen { align: center middle; }
+    #create-dialog {
+        width: 60;
+        height: auto;
+        padding: 2 4;
+        border: round $accent;
+        background: $boost;
+    }
+    #create-title { margin-bottom: 1; text-style: bold; }
+    #create-dialog Label { margin-top: 1; }
+    #create-dialog Input { margin-top: 0; }
+    #create-dialog Select { margin-top: 0; }
+    #create-buttons { height: auto; align: center middle; margin-top: 1; }
+    #create-buttons Button { margin: 0 1; }
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="create-dialog"):
+            yield Label("Create New Bucket", id="create-title")
+            yield Label("Bucket Name")
+            yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
+            yield Label("Permission")
+            yield Select(
+                PERMISSION_OPTIONS,
+                value="private",
+                id="permission",
+                allow_blank=False,
+            )
+            with Horizontal(id="create-buttons"):
+                yield Button("Create", variant="primary", id="create-ok")
+                yield Button("Cancel", variant="default", id="create-cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#bucket_name", Input).focus()
+
+    @on(Button.Pressed, "#create-ok")
+    @on(Input.Submitted, "#bucket_name")
+    def _submit(self) -> None:
+        name = self.query_one("#bucket_name", Input).value.strip()
+        permission = str(self.query_one("#permission", Select).value)
+        self.dismiss((name, permission))
+
+    @on(Button.Pressed, "#create-cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 class BucketManagementScreen(S3Screen):
@@ -47,19 +101,6 @@ class BucketManagementScreen(S3Screen):
     #action-row Button {
         margin-right: 1;
     }
-    #create-collapsible {
-        margin: 0 2;
-    }
-    #create-form {
-        height: auto;
-        padding: 0 1;
-    }
-    #create-form Label {
-        margin-top: 1;
-    }
-    #create-form Button {
-        margin-top: 1;
-    }
     #status {
         margin: 0 2;
         height: auto;
@@ -73,20 +114,9 @@ class BucketManagementScreen(S3Screen):
         yield EndpointBar()
         yield DataTable(id="bucket-table")
         with Horizontal(id="action-row"):
+            yield Button("New Bucket", variant="primary", id="create_btn")
             yield Button("Delete Selected", variant="error", id="delete_btn")
             yield Button("Refresh", variant="default", id="refresh_btn")
-        with Collapsible(title="Create Bucket", collapsed=True, id="create-collapsible"):
-            with Vertical(id="create-form"):
-                yield Label("Bucket Name")
-                yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
-                yield Label("Permission")
-                yield Select(
-                    PERMISSION_OPTIONS,
-                    value="private",
-                    id="permission",
-                    allow_blank=False,
-                )
-                yield Button("Create Bucket", variant="primary", id="create_btn")
         yield Label("", id="status")
         yield Footer()
 
@@ -113,6 +143,14 @@ class BucketManagementScreen(S3Screen):
             self.ui(status.update, f"{len(buckets)} bucket(s)")
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
+
+    @on(Button.Pressed, "#create_btn")
+    def _open_create_dialog(self) -> None:
+        def on_result(result: tuple[str, str] | None) -> None:
+            if result is not None:
+                self._create_bucket(*result)
+
+        self.app.push_screen(CreateBucketScreen(), on_result)
 
     @on(Button.Pressed, "#refresh_btn")
     def action_refresh(self) -> None:
@@ -175,11 +213,8 @@ class BucketManagementScreen(S3Screen):
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
 
-    @on(Button.Pressed, "#create_btn")
     @work(thread=True, exclusive=True, group="create")
-    def handle_create(self) -> None:
-        name = self.query_one("#bucket_name", Input).value.strip()
-        permission = self.query_one("#permission", Select).value
+    def _create_bucket(self, name: str, permission: str) -> None:
         status = self.query_one("#status", Label)
 
         if not name:
@@ -203,5 +238,3 @@ class BucketManagementScreen(S3Screen):
             self._load_buckets()
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
-
-

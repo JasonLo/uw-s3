@@ -70,8 +70,7 @@ class S3Screen(Screen):
         bar.update(
             Text.from_markup(
                 f"  [bold]Endpoint:[/] {ep} [dim]({hint})[/]"
-                f"   [dim italic]click or press e to switch[/]\n"
-                f"  [dim]Buckets are tied to the endpoint chosen at creation time[/]"
+                f"   [dim]— buckets are tied to their creation endpoint[/]"
             )
         )
 

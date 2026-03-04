@@ -25,9 +25,9 @@ class MainMenuScreen(S3Screen):
     """Landing screen with navigation options."""
 
     BINDINGS = [
-        Binding("b", "bucket_management", "Manage Buckets"),
-        Binding("f", "file_manager", "Manage Files"),
-        Binding("m", "mount_bucket", "Mount Bucket"),
+        Binding("1", "bucket_management", "Manage Buckets"),
+        Binding("2", "file_manager", "Manage Files"),
+        Binding("3", "mount_bucket", "Mount Bucket"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -43,7 +43,7 @@ class MainMenuScreen(S3Screen):
         yield OptionList(
             Option(
                 _option(
-                    "b",
+                    "1",
                     "Manage Buckets",
                     "Create, delete, and set permissions on S3 buckets",
                 ),
@@ -51,7 +51,7 @@ class MainMenuScreen(S3Screen):
             ),
             Option(
                 _option(
-                    "f",
+                    "2",
                     "Manage Files",
                     "Browse buckets, upload/download files, and sync folders",
                 ),
@@ -59,7 +59,7 @@ class MainMenuScreen(S3Screen):
             ),
             Option(
                 _option(
-                    "m",
+                    "3",
                     "Mount Bucket",
                     "Mount an S3 bucket as a local directory via rclone",
                 ),
