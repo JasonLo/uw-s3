@@ -38,8 +38,14 @@ def _parse_version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.split("."))
 
 
+_SKIP_UPDATE_ENV = "UW_S3_JUST_UPDATED"
+
+
 def check_and_update() -> None:
     """Check for updates and optionally reinstall."""
+    if os.environ.pop(_SKIP_UPDATE_ENV, None):
+        return
+
     current = get_current_version()
     latest = get_latest_version()
     if latest is None:
@@ -67,4 +73,5 @@ def check_and_update() -> None:
     exe = shutil.which("uw-s3")
     if exe:
         print(f"Updated to v{latest}. Restarting...")
+        os.environ[_SKIP_UPDATE_ENV] = "1"
         os.execvp(exe, [exe])
