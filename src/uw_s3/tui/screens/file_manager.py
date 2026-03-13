@@ -83,18 +83,36 @@ class FileManagerScreen(S3Screen):
     }
     #sync-overlay.visible { display: block; }
     #sync-card {
-        width: 60;
+        width: 50%;
+        min-width: 40;
+        max-width: 80;
         height: auto;
-        padding: 1 2;
+        padding: 2 4;
         border: round $accent;
         background: $boost;
+        border-title-align: center;
+        border-title-style: bold;
     }
-    #sync-label { width: 100%; content-align: center middle; text-align: center; margin: 1 0; text-style: bold; }
-    #sync-bar { width: 100%; margin: 1 0; }
+    #sync-label {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+    }
+    #sync-bar {
+        width: 100%;
+        margin: 1 0 0 0;
+    }
     #sync-bar PercentageStatus { display: none; }
     #sync-bar ETAStatus { display: none; }
-    #sync-status { width: 100%; content-align: center middle; text-align: center; margin: 1 0; color: $text-muted; }
-    #cancel-sync-btn { margin: 1 0; width: 100%; }
+    #sync-status {
+        width: 100%;
+        text-align: center;
+        margin: 1 0 0 0;
+        color: $text-muted;
+    }
+    #cancel-sync-btn {
+        margin: 1 4 0 4;
+    }
     """
 
     selected_local_path: str = ""
@@ -138,8 +156,9 @@ class FileManagerScreen(S3Screen):
         yield Footer()
         with Middle(id="sync-overlay"):
             with Center():
-                with Vertical(id="sync-card"):
-                    yield Label("Syncing...", id="sync-label")
+                with Vertical(id="sync-card") as card:
+                    card.border_title = "Syncing"
+                    yield Label("Preparing...", id="sync-label")
                     yield ProgressBar(id="sync-bar", total=100)
                     yield Label("", id="sync-status")
                     yield Button("Cancel", id="cancel-sync-btn", variant="error")
@@ -351,10 +370,12 @@ class FileManagerScreen(S3Screen):
 
     def _show_overlay(self, direction: str, total: int) -> None:
         overlay = self.query_one("#sync-overlay")
+        card = self.query_one("#sync-card")
         label = self.query_one("#sync-label", Label)
         status = self.query_one("#sync-status", Label)
         bar = self.query_one("#sync-bar", ProgressBar)
-        label.update(f"{direction.capitalize()}ing {total} file(s)")
+        card.border_title = f" {direction.capitalize()}ing "
+        label.update(f"{total} file(s) to {direction}")
         status.update(f"0 / {total}  ·  0%  ·  estimating...")
         bar.update(total=total, progress=0)
         overlay.add_class("visible")
