@@ -67,7 +67,7 @@ async def test_navigate_to_bucket_management() -> None:
     app = _make_app()
     async with app.run_test() as pilot:
         with patch.object(app.s3, "list_buckets", return_value=[]):
-            await pilot.press("b")
+            await pilot.press("1")
             await pilot.pause()
             from uw_s3.tui.screens.bucket_management import BucketManagementScreen
 
@@ -78,7 +78,7 @@ async def test_navigate_back_with_escape() -> None:
     app = _make_app()
     async with app.run_test() as pilot:
         with patch.object(app.s3, "list_buckets", return_value=[]):
-            await pilot.press("b")
+            await pilot.press("1")
             await pilot.pause()
             from uw_s3.tui.screens.bucket_management import BucketManagementScreen
 

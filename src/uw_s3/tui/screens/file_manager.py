@@ -3,24 +3,33 @@
 from pathlib import Path
 from typing import Literal
 
+import threading
+import time
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Center, Horizontal, Middle, Vertical
 from textual.widgets import (
     Button,
     DataTable,
     DirectoryTree,
     Footer,
     Header,
+    Label,
     Log,
+    ProgressBar,
     Select,
 )
 
 from uw_s3.sync.config import add_mapping
-from uw_s3.sync.engine import SyncEngine
+from uw_s3.sync.engine import SyncAction, SyncEngine
 from uw_s3.sync.models import SyncMap
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
+
+
+class _SyncCancelled(Exception):
+    """Raised when the user cancels a sync operation."""
 
 
 def _human_size(size: int) -> str:
@@ -63,11 +72,39 @@ class FileManagerScreen(S3Screen):
     .action-group { width: 1fr; height: auto; }
     .action-group-right { margin-left: 1; }
     #log { height: 10; margin: 0 2 1 2; border: round $panel; }
+
+    #sync-overlay {
+        display: none;
+        dock: bottom;
+        layer: overlay;
+        width: 100%;
+        height: 100%;
+        background: $surface 80%;
+    }
+    #sync-overlay.visible { display: block; }
+    #sync-card {
+        width: 60;
+        height: auto;
+        padding: 1 2;
+        border: round $accent;
+        background: $boost;
+    }
+    #sync-label { width: 100%; content-align: center middle; text-align: center; margin-bottom: 1; text-style: bold; }
+    #sync-bar { width: 100%; }
+    #sync-bar PercentageStatus { display: none; }
+    #sync-bar ETAStatus { display: none; }
+    #sync-status { width: 100%; content-align: center middle; text-align: center; margin-top: 1; color: $text-muted; }
+    #cancel-sync-btn { margin-top: 1; width: 100%; }
     """
 
     selected_local_path: str = ""
     _selected_s3_key: str = ""
     _current_prefix: str = ""
+    _sync_cancelled: threading.Event
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._sync_cancelled = threading.Event()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -99,6 +136,13 @@ class FileManagerScreen(S3Screen):
         log.border_title = "Output"
         yield log
         yield Footer()
+        with Middle(id="sync-overlay"):
+            with Center():
+                with Vertical(id="sync-card"):
+                    yield Label("Syncing...", id="sync-label")
+                    yield ProgressBar(id="sync-bar", total=100)
+                    yield Label("", id="sync-status")
+                    yield Button("Cancel", id="cancel-sync-btn", variant="error")
 
     def on_mount(self) -> None:
         self._update_endpoint_bar()
@@ -289,6 +333,46 @@ class FileManagerScreen(S3Screen):
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
 
+    @staticmethod
+    def _format_eta(seconds: float) -> str:
+        """Format seconds into a human-friendly time string."""
+        s = int(seconds)
+        if s < 60:
+            return f"{s}s"
+        m, s = divmod(s, 60)
+        if m < 60:
+            return f"{m}m {s:02d}s"
+        h, m = divmod(m, 60)
+        return f"{h}h {m:02d}m"
+
+    def _show_overlay(self, direction: str, total: int) -> None:
+        overlay = self.query_one("#sync-overlay")
+        label = self.query_one("#sync-label", Label)
+        status = self.query_one("#sync-status", Label)
+        bar = self.query_one("#sync-bar", ProgressBar)
+        label.update(f"{direction.capitalize()}ing {total} file(s)")
+        status.update(f"0 / {total}  ·  0%  ·  estimating...")
+        bar.update(total=total, progress=0)
+        overlay.add_class("visible")
+
+    def _update_status(self, completed: int, total: int, started: float) -> None:
+        pct = int(completed / total * 100)
+        elapsed = time.monotonic() - started
+        if completed > 0:
+            eta = elapsed / completed * (total - completed)
+            eta_str = f"~{self._format_eta(eta)} left"
+        else:
+            eta_str = "estimating..."
+        status = self.query_one("#sync-status", Label)
+        self.ui(status.update, f"{completed} / {total}  ·  {pct}%  ·  {eta_str}")
+
+    def _hide_overlay(self) -> None:
+        self.query_one("#sync-overlay").remove_class("visible")
+
+    @on(Button.Pressed, "#cancel-sync-btn")
+    def _handle_cancel(self) -> None:
+        self._sync_cancelled.set()
+
     def _run_sync(self, direction: Literal["push", "pull"]) -> None:
         result = self._make_engine()
         if not result:
@@ -296,23 +380,53 @@ class FileManagerScreen(S3Screen):
         engine, log = result
         arrow = "\u25b2" if direction == "push" else "\u25bc"
         sync_fn = engine.push if direction == "push" else engine.pull
+        status_fn = engine.status_push if direction == "push" else engine.status_pull
+
         self.ui(log.write_line, f"{direction.capitalize()}ing...")
+
+        bar = self.query_one("#sync-bar", ProgressBar)
+        self._sync_cancelled.clear()
         try:
-            actions = sync_fn(
-                callback=lambda a: self.ui(
-                    log.write_line, f"  {arrow} {a.relative_path}"
-                )
-            )
-            self.ui(
-                log.write_line, f"Done \u2014 {len(actions)} file(s) {direction}ed."
-            )
+            pending = status_fn()
+            total = len(pending)
+            if total == 0:
+                self.ui(log.write_line, f"Nothing to {direction} — all in sync.")
+                return
+
+            self.ui(self._show_overlay, direction, total)
+            started = time.monotonic()
+
+            completed = 0
+
+            def on_file(a: SyncAction) -> None:
+                nonlocal completed
+                if self._sync_cancelled.is_set():
+                    raise _SyncCancelled
+                completed += 1
+                self.ui(log.write_line, f"  {arrow} {a.relative_path}")
+                self.ui(bar.update, advance=1)
+                self._update_status(completed, total, started)
+
+            actions = sync_fn(callback=on_file, actions=pending)
+            self.ui(log.write_line, f"Done — {len(actions)} file(s) {direction}ed.")
             add_mapping(engine.mapping)
+            if direction == "push":
+                self._load_objects(engine.mapping.bucket)
+            else:
+                self.ui(self.query_one("#local-tree", DirectoryTree).reload)
+        except _SyncCancelled:
+            self.ui(
+                log.write_line,
+                f"Cancelled — {completed}/{total} file(s) {direction}ed.",
+            )
             if direction == "push":
                 self._load_objects(engine.mapping.bucket)
             else:
                 self.ui(self.query_one("#local-tree", DirectoryTree).reload)
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
+        finally:
+            self.ui(self._hide_overlay)
 
     # --- preview ---
 

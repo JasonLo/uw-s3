@@ -80,10 +80,13 @@ class SyncEngine:
         return actions
 
     def push(
-        self, callback: Callable[[SyncAction], object] | None = None
+        self,
+        callback: Callable[[SyncAction], object] | None = None,
+        actions: list[SyncAction] | None = None,
     ) -> list[SyncAction]:
         """Upload local files that are new or differ in size."""
-        actions = self.status_push()
+        if actions is None:
+            actions = self.status_push()
         for action in actions:
             local_path = self.local / action.relative_path
             key = self._object_key(action.relative_path)
@@ -93,10 +96,13 @@ class SyncEngine:
         return actions
 
     def pull(
-        self, callback: Callable[[SyncAction], object] | None = None
+        self,
+        callback: Callable[[SyncAction], object] | None = None,
+        actions: list[SyncAction] | None = None,
     ) -> list[SyncAction]:
         """Download S3 objects that are new or differ in size."""
-        actions = self.status_pull()
+        if actions is None:
+            actions = self.status_pull()
         for action in actions:
             local_path = self.local / action.relative_path
             local_path.parent.mkdir(parents=True, exist_ok=True)

@@ -28,6 +28,8 @@ class MainMenuScreen(S3Screen):
         Binding("1", "bucket_management", "Manage Buckets"),
         Binding("2", "file_manager", "Manage Files"),
         Binding("3", "mount_bucket", "Mount Bucket"),
+        Binding("w", "cursor_up", "Up", show=False),
+        Binding("s", "cursor_down", "Down", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -104,6 +106,12 @@ class MainMenuScreen(S3Screen):
         self.s3_app.cleanup_mounts()
         self.app.exit()
         threading.Timer(1.0, os._exit, args=(0,)).start()
+
+    def action_cursor_up(self) -> None:
+        self.query_one("#menu", OptionList).action_cursor_up()
+
+    def action_cursor_down(self) -> None:
+        self.query_one("#menu", OptionList).action_cursor_down()
 
     def action_mount_bucket(self) -> None:
         from uw_s3.tui.screens.mount import MountScreen
