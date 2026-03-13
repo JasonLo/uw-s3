@@ -2,6 +2,8 @@
 
 import importlib.metadata
 import json
+import os
+import shutil
 import subprocess
 import sys
 import urllib.request
@@ -54,9 +56,15 @@ def check_and_update() -> None:
     if answer != "y":
         return
 
-    subprocess.run(
+    result = subprocess.run(
         ["uv", "tool", "install", "--force", f"git+{REPO_URL}", "--python", "3.14"],
         check=False,
     )
-    print("Restart uw-s3 to use the new version.")
-    sys.exit(0)
+    if result.returncode != 0:
+        print("Update failed.")
+        return
+
+    exe = shutil.which("uw-s3")
+    if exe:
+        print(f"Updated to v{latest}. Restarting...")
+        os.execvp(exe, [exe])

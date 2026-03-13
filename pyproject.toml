@@ -1,6 +1,6 @@
 [project]
 name = "uw-s3"
-version = "0.3.0"
+version = "0.3.1"
 description = "Terminal UI for UW-Madison Research Object Storage (S3)"
 readme = "README.md"
 authors = [
