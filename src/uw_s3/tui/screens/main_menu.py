@@ -88,9 +88,11 @@ class MainMenuScreen(S3Screen):
 
     def on_mount(self) -> None:
         self._update_endpoint_bar()
+        self.query_one("#menu", OptionList).focus()
 
     def on_screen_resume(self) -> None:
         self._update_endpoint_bar()
+        self.query_one("#menu", OptionList).focus()
 
     def action_file_manager(self) -> None:
         from uw_s3.tui.screens.file_manager import FileManagerScreen
