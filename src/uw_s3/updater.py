@@ -1,12 +1,13 @@
 """Auto-update checker — compares installed version against latest GitHub tag."""
 
-import importlib.metadata
 import json
 import os
 import shutil
 import subprocess
 import sys
 import urllib.request
+
+from uw_s3 import __version__
 
 
 REPO_URL = "https://github.com/jasonlo/uw-s3.git"
@@ -15,7 +16,7 @@ TAGS_API = "https://api.github.com/repos/jasonlo/uw-s3/tags"
 
 def get_current_version() -> str:
     """Return the installed version of uw-s3."""
-    return importlib.metadata.version("uw-s3")
+    return __version__
 
 
 def get_latest_version() -> str | None:
@@ -54,7 +55,7 @@ def check_and_update() -> None:
     try:
         if _parse_version(latest) <= _parse_version(current):
             return
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return
 
     print(f"Update available: v{current} → v{latest}")
