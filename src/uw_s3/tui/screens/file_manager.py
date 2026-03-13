@@ -305,8 +305,12 @@ class FileManagerScreen(S3Screen):
         if not local_dir:
             self.ui(log.write_line, "Select a local directory first.")
             return None
+        prefix = self.ui(lambda: self._current_prefix)
         mapping = SyncMap(
-            local_dir=str(local_dir), bucket=bucket, endpoint=self.s3_app.s3.endpoint
+            local_dir=str(local_dir),
+            bucket=bucket,
+            prefix=prefix,
+            endpoint=self.s3_app.s3.endpoint,
         )
         return SyncEngine(self.s3_app.s3, mapping), log
 
