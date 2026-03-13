@@ -63,9 +63,7 @@ class S3Screen(Screen):
             return
         ep = self.s3_app.endpoint_label
         hint = (
-            "requires UW network or VPN"
-            if ep == "Campus"
-            else "works from any network"
+            "requires UW network or VPN" if ep == "Campus" else "works from any network"
         )
         bar.update(
             Text.from_markup(

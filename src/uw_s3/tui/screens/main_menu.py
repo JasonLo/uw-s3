@@ -109,5 +109,3 @@ class MainMenuScreen(S3Screen):
         from uw_s3.tui.screens.mount import MountScreen
 
         self.app.push_screen(MountScreen())
-
-

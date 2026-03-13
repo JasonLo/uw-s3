@@ -14,6 +14,7 @@ class ObjectInfo:
     name: str
     size: int
     last_modified: datetime | None
+    is_dir: bool = False
 
 
 CAMPUS_ENDPOINT = "campus.s3.wisc.edu"
@@ -72,6 +73,7 @@ class UWS3:
                 name=obj.object_name,
                 size=obj.size or 0,
                 last_modified=obj.last_modified,
+                is_dir=obj.is_dir,
             )
             for obj in self.client.list_objects(
                 bucket, prefix=prefix, recursive=recursive

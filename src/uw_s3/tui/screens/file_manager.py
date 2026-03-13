@@ -44,6 +44,7 @@ class FileManagerScreen(S3Screen):
         Binding("P", "push_all", "Push All", key_display="shift+p"),
         Binding("L", "pull_all", "Pull All", key_display="shift+l"),
         Binding("r", "refresh", "Refresh"),
+        Binding("backspace", "go_up", "Go Up"),
         Binding("escape", "pop_screen", "Back"),
         Binding("q", "pop_screen", "Back"),
     ]
@@ -65,6 +66,7 @@ class FileManagerScreen(S3Screen):
 
     selected_local_path: str = ""
     _selected_s3_key: str = ""
+    _current_prefix: str = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -129,29 +131,75 @@ class FileManagerScreen(S3Screen):
     @work(thread=True)
     def _load_objects(self, bucket: str) -> None:
         try:
-            objects = self.s3_app.s3.list_objects_detail(bucket)
-            rows: list[tuple[str, str, str]] = []
+            objects = self.s3_app.s3.list_objects_detail(
+                bucket, prefix=self._current_prefix, recursive=False
+            )
+            rows: list[tuple[str, str, str, str]] = []
+
+            if self._current_prefix:
+                rows.append(("..", "\U0001f4c1 ..", "\u2014", "\u2014"))
+
             for obj in objects:
-                modified = (
-                    obj.last_modified.strftime("%Y-%m-%d %H:%M")
-                    if obj.last_modified
-                    else "—"
-                )
-                rows.append((obj.name, _human_size(obj.size), modified))
+                if obj.is_dir:
+                    display = "\U0001f4c1 " + obj.name[len(self._current_prefix) :]
+                    rows.append((obj.name, display, "\u2014", "\u2014"))
+                else:
+                    display = obj.name[len(self._current_prefix) :]
+                    modified = (
+                        obj.last_modified.strftime("%Y-%m-%d %H:%M")
+                        if obj.last_modified
+                        else "\u2014"
+                    )
+                    rows.append((obj.name, display, _human_size(obj.size), modified))
+
+            prefix = self._current_prefix
 
             def _rebuild_table() -> None:
                 table = self.query_one("#s3-table", DataTable)
                 table.clear(columns=True)
-                table.add_column("Object Key", key="key")
+                table.add_column("Name", key="name")
                 table.add_column("Size", key="size")
                 table.add_column("Last Modified", key="modified")
-                for name, size, mod in rows:
-                    table.add_row(name, size, mod, key=name)
+                for key, name, size, mod in rows:
+                    table.add_row(name, size, mod, key=key)
+                pane = self.query_one("#s3-pane")
+                if prefix:
+                    pane.border_title = f"S3 Objects \u2014 /{prefix}"
+                else:
+                    pane.border_title = "S3 Objects"
 
             self.ui(_rebuild_table)
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading objects: {exc}")
+
+    def _reload_s3_pane(self) -> None:
+        bucket = self._current_bucket()
+        if bucket:
+            self._load_objects(bucket)
+
+    # --- folder navigation ---
+
+    @on(DataTable.RowSelected, "#s3-table")
+    def handle_s3_row_selected(self, event: DataTable.RowSelected) -> None:
+        key = event.row_key.value
+        if key is None:
+            return
+        if key == "..":
+            self._go_up()
+        elif key.endswith("/"):
+            self._current_prefix = key
+            self._reload_s3_pane()
+
+    def _go_up(self) -> None:
+        if not self._current_prefix:
+            return
+        parts = self._current_prefix.rstrip("/").rsplit("/", 1)
+        self._current_prefix = parts[0] + "/" if len(parts) > 1 else ""
+        self._reload_s3_pane()
+
+    def action_go_up(self) -> None:
+        self._go_up()
 
     # --- selection tracking ---
 
@@ -174,6 +222,7 @@ class FileManagerScreen(S3Screen):
     def handle_bucket_changed(self, event: Select.Changed) -> None:
         if event.value is not Select.NULL:
             self._selected_s3_key = ""
+            self._current_prefix = ""
             self._load_objects(str(event.value))
 
     # --- helpers ---
@@ -216,13 +265,13 @@ class FileManagerScreen(S3Screen):
         if not result:
             return
         engine, log = result
-        arrow = "▲" if direction == "push" else "▼"
+        arrow = "\u25b2" if direction == "push" else "\u25bc"
         status_fn = engine.status_push if direction == "push" else engine.status_pull
         try:
             actions = status_fn()
             self.ui(log.clear)
             if not actions:
-                self.ui(log.write_line, f"Nothing to {direction} — all in sync.")
+                self.ui(log.write_line, f"Nothing to {direction} \u2014 all in sync.")
             else:
                 self.ui(
                     log.write_line, f"{len(actions)} file(s) would be {direction}ed:"
@@ -239,7 +288,7 @@ class FileManagerScreen(S3Screen):
         if not result:
             return
         engine, log = result
-        arrow = "▲" if direction == "push" else "▼"
+        arrow = "\u25b2" if direction == "push" else "\u25bc"
         sync_fn = engine.push if direction == "push" else engine.pull
         self.ui(log.write_line, f"{direction.capitalize()}ing...")
         try:
@@ -248,7 +297,9 @@ class FileManagerScreen(S3Screen):
                     log.write_line, f"  {arrow} {a.relative_path}"
                 )
             )
-            self.ui(log.write_line, f"Done — {len(actions)} file(s) {direction}ed.")
+            self.ui(
+                log.write_line, f"Done \u2014 {len(actions)} file(s) {direction}ed."
+            )
             add_mapping(engine.mapping)
             if direction == "push":
                 self._load_objects(engine.mapping.bucket)
@@ -294,6 +345,8 @@ class FileManagerScreen(S3Screen):
         else:
             obj_key = local_path.name
 
+        obj_key = self._current_prefix + obj_key
+
         self.ui(log.write_line, f"Uploading {obj_key}...")
         try:
             self.s3_app.s3.upload_file(bucket, obj_key, local_path)
@@ -314,6 +367,9 @@ class FileManagerScreen(S3Screen):
             return
         if not self._selected_s3_key:
             self.ui(log.write_line, "Highlight an S3 object to download.")
+            return
+        if self._selected_s3_key.endswith("/"):
+            self.ui(log.write_line, "Cannot download a folder. Navigate into it first.")
             return
 
         obj_key = self._selected_s3_key
