@@ -89,12 +89,12 @@ class FileManagerScreen(S3Screen):
         border: round $accent;
         background: $boost;
     }
-    #sync-label { width: 100%; content-align: center middle; text-align: center; margin-bottom: 1; text-style: bold; }
-    #sync-bar { width: 100%; }
+    #sync-label { width: 100%; content-align: center middle; text-align: center; margin: 1 0; text-style: bold; }
+    #sync-bar { width: 100%; margin: 1 0; }
     #sync-bar PercentageStatus { display: none; }
     #sync-bar ETAStatus { display: none; }
-    #sync-status { width: 100%; content-align: center middle; text-align: center; margin-top: 1; color: $text-muted; }
-    #cancel-sync-btn { margin-top: 1; width: 100%; }
+    #sync-status { width: 100%; content-align: center middle; text-align: center; margin: 1 0; color: $text-muted; }
+    #cancel-sync-btn { margin: 1 0; width: 100%; }
     """
 
     selected_local_path: str = ""
