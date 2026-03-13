@@ -3,6 +3,7 @@
 from textual.app import App
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
+from uw_s3.preferences import load_preferences, update_preference
 from uw_s3.rclone import RcloneMount
 from uw_s3.tui.screens.main_menu import MainMenuScreen
 
@@ -25,6 +26,8 @@ class UWS3App(App):
         self.secret_key = secret_key
         self.s3 = UWS3(access_key, secret_key, endpoint=endpoint)
         self.active_mounts: dict[str, RcloneMount] = {}
+        prefs = load_preferences()
+        self.last_bucket: str = prefs.get("last_bucket", "")
 
     @property
     def endpoint_label(self) -> str:
@@ -35,6 +38,12 @@ class UWS3App(App):
         new = WEB_ENDPOINT if self.s3.endpoint == CAMPUS_ENDPOINT else CAMPUS_ENDPOINT
         self.s3 = UWS3(self.access_key, self.secret_key, endpoint=new)
         self.sub_title = f"Endpoint: {self.endpoint_label}"
+        update_preference("endpoint", new)
+
+    def save_last_bucket(self, bucket: str) -> None:
+        """Persist the last-selected bucket."""
+        self.last_bucket = bucket
+        update_preference("last_bucket", bucket)
 
     def on_mount(self) -> None:
         self.theme = "atom-one-dark"

@@ -31,10 +31,16 @@ def main() -> None:
     check_and_update()
 
     from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT
+    from uw_s3.preferences import load_preferences
     from uw_s3.tui.app import UWS3App
 
-    endpoint_env = os.getenv("S3_ENDPOINT", "campus").lower()
-    endpoint = WEB_ENDPOINT if endpoint_env == "web" else CAMPUS_ENDPOINT
+    prefs = load_preferences()
+    saved_endpoint = prefs.get("endpoint")
+    if saved_endpoint in (CAMPUS_ENDPOINT, WEB_ENDPOINT):
+        endpoint = saved_endpoint
+    else:
+        endpoint_env = os.getenv("S3_ENDPOINT", "campus").lower()
+        endpoint = WEB_ENDPOINT if endpoint_env == "web" else CAMPUS_ENDPOINT
 
     app = UWS3App(access_key=access_key, secret_key=secret_key, endpoint=endpoint)
 

@@ -43,6 +43,7 @@ class FileManagerScreen(S3Screen):
         Binding("l", "preview_pull", "Preview Pull"),
         Binding("P", "push_all", "Push All", key_display="shift+p"),
         Binding("L", "pull_all", "Pull All", key_display="shift+l"),
+        Binding("x", "delete", "Delete"),
         Binding("r", "refresh", "Refresh"),
         Binding("backspace", "go_up", "Go Up"),
         Binding("escape", "pop_screen", "Back"),
@@ -91,6 +92,7 @@ class FileManagerScreen(S3Screen):
                 yield Button("Push All [P]", variant="primary", id="push-btn")
             with Horizontal(classes="action-group action-group-right"):
                 yield Button("Download [d]", id="download-btn")
+                yield Button("Delete [x]", variant="error", id="delete-btn")
                 yield Button("Preview Pull [l]", id="preview-pull-btn")
                 yield Button("Pull All [L]", variant="success", id="pull-btn")
         log = Log(id="log", max_lines=100)
@@ -124,6 +126,8 @@ class FileManagerScreen(S3Screen):
             self.ui(sel.set_options, options)
             if prev is not Select.NULL and str(prev) in buckets:
                 self.ui(setattr, sel, "value", prev)
+            elif self.s3_app.last_bucket in buckets:
+                self.ui(setattr, sel, "value", self.s3_app.last_bucket)
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading buckets: {exc}")
@@ -223,7 +227,9 @@ class FileManagerScreen(S3Screen):
         if event.value is not Select.NULL:
             self._selected_s3_key = ""
             self._current_prefix = ""
-            self._load_objects(str(event.value))
+            bucket = str(event.value)
+            self.s3_app.save_last_bucket(bucket)
+            self._load_objects(bucket)
 
     # --- helpers ---
 
@@ -384,6 +390,52 @@ class FileManagerScreen(S3Screen):
             self.s3_app.s3.download_file(bucket, obj_key, dest)
             self.ui(log.write_line, f"Saved to {dest}")
             self.ui(self.query_one("#local-tree", DirectoryTree).reload)
+        except Exception as exc:
+            self.ui(log.write_line, f"Error: {exc}")
+
+    # --- delete ---
+
+    @on(Button.Pressed, "#delete-btn")
+    def action_delete(self) -> None:
+        log = self._log()
+        bucket = self._current_bucket()
+        if not bucket:
+            log.write_line("Select a bucket first.")
+            return
+        if not self._selected_s3_key or self._selected_s3_key == "..":
+            log.write_line("Highlight an S3 object or folder to delete.")
+            return
+
+        key = self._selected_s3_key
+        is_folder = key.endswith("/")
+        display = (
+            key[len(self._current_prefix) :] if is_folder else key.rsplit("/", 1)[-1]
+        )
+        kind = "folder" if is_folder else "file"
+
+        from uw_s3.tui.screens.confirm import ConfirmScreen
+
+        self.app.push_screen(
+            ConfirmScreen(f"Delete {kind} '{display}' from {bucket}?"),
+            callback=lambda confirmed: (
+                self._do_delete(confirmed, bucket, key) if confirmed else None
+            ),
+        )
+
+    @work(thread=True)
+    def _do_delete(self, confirmed: bool, bucket: str, key: str) -> None:
+        if not confirmed:
+            return
+        log = self._log()
+        try:
+            if key.endswith("/"):
+                count = self.s3_app.s3.delete_prefix(bucket, key)
+                self.ui(log.write_line, f"Deleted {count} object(s) under {key}")
+            else:
+                self.s3_app.s3.delete_object(bucket, key)
+                self.ui(log.write_line, f"Deleted {key}")
+            self._selected_s3_key = ""
+            self._reload_s3_pane()
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
 

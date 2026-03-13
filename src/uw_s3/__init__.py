@@ -151,6 +151,24 @@ class UWS3:
         policy = {"Version": "2012-10-17", "Statement": statements}
         self.client.set_bucket_policy(bucket, json.dumps(policy))
 
+    def delete_object(self, bucket: str, object_name: str) -> None:
+        """Delete a single object from a bucket."""
+        self.client.remove_object(bucket, object_name)
+
+    def delete_prefix(self, bucket: str, prefix: str) -> int:
+        """Delete all objects under a prefix. Returns count of deleted objects."""
+        objects = list(self.client.list_objects(bucket, prefix=prefix, recursive=True))
+        if not objects:
+            return 0
+        errors = list(
+            self.client.remove_objects(
+                bucket, [DeleteObject(obj.object_name) for obj in objects]
+            )
+        )
+        if errors:
+            raise RuntimeError(f"Failed to delete objects: {errors[0].message}")
+        return len(objects)
+
     def delete_bucket(self, bucket: str) -> None:
         """Remove an empty bucket."""
         self.client.remove_bucket(bucket)
