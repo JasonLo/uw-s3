@@ -6,6 +6,7 @@
 # ]
 # ///
 import os
+import re
 import subprocess
 import sys
 from enum import Enum
@@ -119,9 +120,25 @@ def main(
         new_version: str = run(["uv", "version", "--short"], env=_UV_ENV)
         tag_name: str = f"v{new_version}"
 
+        # Phase 2b: Sync __version__ in __init__.py
+        init_path = Path("src/uw_s3/__init__.py")
+        init_text = init_path.read_text()
+        updated = re.sub(
+            r'^__version__\s*=\s*"[^"]*"',
+            f'__version__ = "{new_version}"',
+            init_text,
+            flags=re.MULTILINE,
+        )
+        if updated == init_text:
+            console.print("[bold red]❌ Could not find __version__ in __init__.py[/bold red]")
+            raise ReleaseError("__version__ not found in __init__.py")
+        init_path.write_text(updated)
+        console.print(f"[green]✅ Updated __version__ to {new_version}[/green]")
+
         # Phase 3: Commit and Tag
         console.print(f"📦 [blue]Creating tag {tag_name}...[/blue]")
         run(["git", "add", "pyproject.toml"])
+        run(["git", "add", str(init_path)])
         if Path("uv.lock").exists():
             run(["git", "add", "uv.lock"])
         run(["git", "commit", "-m", f"chore: release {tag_name}"], capture=False)
