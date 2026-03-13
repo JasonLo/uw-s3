@@ -9,6 +9,7 @@ import time
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.color import Gradient
 from textual.containers import Center, Horizontal, Middle, Vertical
 from textual.widgets import (
     Button,
@@ -79,39 +80,40 @@ class FileManagerScreen(S3Screen):
         layer: overlay;
         width: 100%;
         height: 100%;
-        background: $surface 80%;
+        background: $primary 30%;
     }
     #sync-overlay.visible { display: block; }
     #sync-card {
-        width: 50%;
-        min-width: 40;
-        max-width: 80;
+        width: 56;
         height: auto;
-        padding: 2 4;
-        border: round $accent;
-        background: $boost;
+        padding: 1 3;
+        border: thick $background 80%;
+        background: $surface;
         border-title-align: center;
         border-title-style: bold;
+        border-title-color: $text;
     }
     #sync-label {
         width: 100%;
         text-align: center;
         text-style: bold;
+        margin: 0 0 1 0;
     }
     #sync-bar {
         width: 100%;
-        margin: 1 0 0 0;
     }
     #sync-bar PercentageStatus { display: none; }
     #sync-bar ETAStatus { display: none; }
     #sync-status {
         width: 100%;
         text-align: center;
-        margin: 1 0 0 0;
+        margin: 1 0;
         color: $text-muted;
+        text-style: italic;
     }
     #cancel-sync-btn {
-        margin: 1 4 0 4;
+        width: 16;
+        margin: 0 auto;
     }
     """
 
@@ -154,14 +156,18 @@ class FileManagerScreen(S3Screen):
         log.border_title = "Output"
         yield log
         yield Footer()
+        gradient = Gradient.from_colors(
+            "#0099cc", "#00bbcc", "#44dd88", "#99dd55", "#eedd00"
+        )
         with Middle(id="sync-overlay"):
             with Center():
                 with Vertical(id="sync-card") as card:
                     card.border_title = "Syncing"
                     yield Label("Preparing...", id="sync-label")
-                    yield ProgressBar(id="sync-bar", total=100)
+                    yield ProgressBar(id="sync-bar", total=100, gradient=gradient)
                     yield Label("", id="sync-status")
-                    yield Button("Cancel", id="cancel-sync-btn", variant="error")
+                    with Center():
+                        yield Button("Cancel", id="cancel-sync-btn", variant="error")
 
     def on_mount(self) -> None:
         self._update_endpoint_bar()
