@@ -113,7 +113,6 @@ class FileManagerScreen(S3Screen):
     }
     #cancel-sync-btn {
         width: 16;
-        margin: 0 auto;
     }
     """
 
