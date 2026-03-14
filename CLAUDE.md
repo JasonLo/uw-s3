@@ -14,6 +14,7 @@ uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the
 - Always use static typing (Python 3.14+)
 - Check online docs for up-to-date syntax
 - Avoid unnecessary comments
+- Commit when you completed a task
 
 ## Commands
 
