@@ -157,6 +157,13 @@ def main(
             subprocess.run(["git", "reset", "--soft", "HEAD~1"], capture_output=True)
             raise
 
+        # Phase 5: GitHub Release
+        console.print(f"🐙 [blue]Creating GitHub release {tag_name}...[/blue]")
+        run(
+            ["gh", "release", "create", tag_name, "--title", tag_name, "--generate-notes"],
+            capture=False,
+        )
+
         console.print(
             f"\n[bold green]✨ Successfully released {tag_name}![/bold green]"
         )
