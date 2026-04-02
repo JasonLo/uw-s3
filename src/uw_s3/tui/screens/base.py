@@ -29,7 +29,7 @@ class EndpointBar(Static, can_focus=True):
     """
 
     def on_click(self) -> None:
-        self.screen.action_switch_endpoint()
+        cast("S3Screen", self.screen).action_switch_endpoint()
 
 
 class S3Screen(Screen):

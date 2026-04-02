@@ -54,6 +54,8 @@ class FileManagerScreen(S3Screen):
         Binding("P", "push_all", "Push All", key_display="shift+p"),
         Binding("L", "pull_all", "Pull All", key_display="shift+l"),
         Binding("x", "delete", "Delete"),
+        Binding("n", "rename", "Rename"),
+        Binding("m", "move", "Move"),
         Binding("r", "refresh", "Refresh"),
         Binding("backspace", "go_up", "Go Up"),
         Binding("escape", "pop_screen", "Back"),
@@ -70,6 +72,7 @@ class FileManagerScreen(S3Screen):
     #s3-table { height: 1fr; }
     #action-bar { height: auto; margin: 0 2; }
     #action-bar Button { margin-right: 1; }
+    #rename-btn, #move-btn { min-width: 0; padding: 0 1; }
     .action-group { width: 1fr; height: auto; }
     .action-group-right { margin-left: 1; }
     #log { height: 10; margin: 0 2 1 2; border: round $panel; }
@@ -121,8 +124,8 @@ class FileManagerScreen(S3Screen):
     _current_prefix: str = ""
     _sync_cancelled: threading.Event
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(name=name, id=id, classes=classes)
         self._sync_cancelled = threading.Event()
 
     def compose(self) -> ComposeResult:
@@ -149,6 +152,8 @@ class FileManagerScreen(S3Screen):
             with Horizontal(classes="action-group action-group-right"):
                 yield Button("Download [d]", id="download-btn")
                 yield Button("Delete [x]", variant="error", id="delete-btn")
+                yield Button("Rename [n]", id="rename-btn")
+                yield Button("Move [m]", id="move-btn")
                 yield Button("Preview Pull [l]", id="preview-pull-btn")
                 yield Button("Pull All [L]", variant="success", id="pull-btn")
         log = Log(id="log", max_lines=100)
@@ -578,6 +583,89 @@ class FileManagerScreen(S3Screen):
             else:
                 self.s3_app.s3.delete_object(bucket, key)
                 self.ui(log.write_line, f"Deleted {key}")
+            self._selected_s3_key = ""
+            self._reload_s3_pane()
+        except Exception as exc:
+            self.ui(log.write_line, f"Error: {exc}")
+
+    # --- rename / move ---
+
+    @on(Button.Pressed, "#rename-btn")
+    def action_rename(self) -> None:
+        log = self._log()
+        bucket = self._current_bucket()
+        if not bucket:
+            log.write_line("Select a bucket first.")
+            return
+        key = self._selected_s3_key
+        if not key or key == "..":
+            log.write_line("Highlight an S3 object or folder to rename.")
+            return
+
+        current_name = key.rstrip("/").rsplit("/", 1)[-1]
+
+        from uw_s3.tui.screens.input_dialog import InputScreen
+
+        self.app.push_screen(
+            InputScreen("New name:", current_name),
+            callback=lambda new_name: (
+                self._do_rename(bucket, key, new_name, full_path=False)
+                if new_name
+                else None
+            ),
+        )
+
+    @on(Button.Pressed, "#move-btn")
+    def action_move(self) -> None:
+        log = self._log()
+        bucket = self._current_bucket()
+        if not bucket:
+            log.write_line("Select a bucket first.")
+            return
+        key = self._selected_s3_key
+        if not key or key == "..":
+            log.write_line("Highlight an S3 object or folder to move.")
+            return
+
+        from uw_s3.tui.screens.input_dialog import InputScreen
+
+        self.app.push_screen(
+            InputScreen("New path:", key),
+            callback=lambda new_path: (
+                self._do_rename(bucket, key, new_path, full_path=True)
+                if new_path
+                else None
+            ),
+        )
+
+    @work(thread=True)
+    def _do_rename(
+        self, bucket: str, old_key: str, new_value: str, *, full_path: bool
+    ) -> None:
+        log = self._log()
+        try:
+            if old_key.endswith("/"):
+                if full_path:
+                    new_key = new_value.rstrip("/") + "/"
+                else:
+                    parent = old_key.rstrip("/").rsplit("/", 1)
+                    prefix = parent[0] + "/" if len(parent) > 1 else ""
+                    new_key = prefix + new_value.strip("/") + "/"
+                count = self.s3_app.s3.rename_prefix(bucket, old_key, new_key)
+                self.ui(
+                    log.write_line,
+                    f"Renamed {old_key} → {new_key} ({count} object(s))",
+                )
+            else:
+                if full_path:
+                    new_key = new_value
+                else:
+                    parent_prefix = (
+                        old_key.rsplit("/", 1)[0] + "/" if "/" in old_key else ""
+                    )
+                    new_key = parent_prefix + new_value
+                self.s3_app.s3.rename_object(bucket, old_key, new_key)
+                self.ui(log.write_line, f"Renamed {old_key} → {new_key}")
             self._selected_s3_key = ""
             self._reload_s3_pane()
         except Exception as exc:

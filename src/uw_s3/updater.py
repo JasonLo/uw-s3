@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import urllib.request
 
 from uw_s3 import __version__

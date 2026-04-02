@@ -3,11 +3,11 @@
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import Screen
+from textual.screen import ModalScreen
 from textual.widgets import Button, Label
 
 
-class ConfirmScreen(Screen[bool]):
+class ConfirmScreen(ModalScreen[bool]):
     """Modal confirmation dialog."""
 
     CSS = """

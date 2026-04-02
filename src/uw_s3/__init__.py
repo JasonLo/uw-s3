@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from minio import Minio
+from minio.commonconfig import CopySource
 from minio.deleteobjects import DeleteObject
 
 __version__ = "0.3.4"
@@ -170,6 +171,29 @@ class UWS3:
         if errors:
             raise RuntimeError(f"Failed to delete objects: {errors[0].message}")
         return len(objects)
+
+    def copy_object(self, bucket: str, src_key: str, dst_key: str) -> None:
+        """Copy a single object to a new key within the same bucket."""
+        self.client.copy_object(bucket, dst_key, CopySource(bucket, src_key))
+
+    def copy_prefix(self, bucket: str, src_prefix: str, dst_prefix: str) -> int:
+        """Copy all objects under src_prefix to dst_prefix. Returns count."""
+        objects = list(self.client.list_objects(bucket, prefix=src_prefix, recursive=True))
+        for obj in objects:
+            new_key = dst_prefix + obj.object_name[len(src_prefix):]
+            self.client.copy_object(bucket, new_key, CopySource(bucket, obj.object_name))
+        return len(objects)
+
+    def rename_object(self, bucket: str, old_key: str, new_key: str) -> None:
+        """Rename a single object (copy + delete)."""
+        self.copy_object(bucket, old_key, new_key)
+        self.delete_object(bucket, old_key)
+
+    def rename_prefix(self, bucket: str, old_prefix: str, new_prefix: str) -> int:
+        """Rename/move a folder prefix (copy all + delete all). Returns count."""
+        count = self.copy_prefix(bucket, old_prefix, new_prefix)
+        self.delete_prefix(bucket, old_prefix)
+        return count
 
     def delete_bucket(self, bucket: str) -> None:
         """Remove an empty bucket."""

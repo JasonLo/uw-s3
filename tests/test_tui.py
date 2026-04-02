@@ -91,7 +91,7 @@ async def test_navigate_back_with_escape() -> None:
 
 async def test_confirm_screen_yes() -> None:
     app = _make_app()
-    results: list[bool] = []
+    results: list[bool | None] = []
 
     async with app.run_test() as pilot:
         app.push_screen(ConfirmScreen("Delete?"), callback=results.append)
@@ -105,7 +105,7 @@ async def test_confirm_screen_yes() -> None:
 
 async def test_confirm_screen_no() -> None:
     app = _make_app()
-    results: list[bool] = []
+    results: list[bool | None] = []
 
     async with app.run_test() as pilot:
         app.push_screen(ConfirmScreen("Delete?"), callback=results.append)
