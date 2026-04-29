@@ -9,15 +9,19 @@ import os
 import re
 import subprocess
 import sys
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-import typer  # type: ignore
+# typer is a PEP 723 script-level dep (see header), not a project dep,
+# so the project's type checker can't resolve it.
+import typer  # ty: ignore[unresolved-import]
 from rich.console import Console
 
 console = Console()
-app = typer.Typer(help="Safe release manager for uv projects.")
+app = typer.Typer(help="Safe release manager for uw-s3.")
+
+DEFAULT_BRANCH = "main"
 
 # When this script runs via `uv run`, VIRTUAL_ENV is set to the script's
 # isolated cache environment. Strip it so `uv version` targets the project's
@@ -25,7 +29,7 @@ app = typer.Typer(help="Safe release manager for uv projects.")
 _UV_ENV = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
 
 
-class Increment(str, Enum):
+class Increment(StrEnum):
     major = "major"
     minor = "minor"
     patch = "patch"
@@ -47,6 +51,20 @@ def run(cmd: list[str], capture: bool = True, env: dict[str, str] | None = None)
         if e.stderr:
             console.print(f"[red]{e.stderr.strip()}[/red]")
         raise ReleaseError(f"Command failed: {' '.join(cmd)}") from e
+
+
+def best_effort(cmd: list[str], description: str) -> None:
+    """Run a rollback command, surfacing stderr on failure but never raising."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[yellow]⚠️ {description} failed:[/yellow]")
+        if result.stderr:
+            console.print(f"[yellow]{result.stderr.strip()}[/yellow]")
+
+
+def get_repo_root() -> Path:
+    """Return the absolute path of the git repo root."""
+    return Path(run(["git", "rev-parse", "--show-toplevel"]))
 
 
 def get_push_target() -> tuple[str, str]:
@@ -113,6 +131,15 @@ def main(
         # Phase 1: Guards
         verify_git_state()
         remote, branch = get_push_target()
+        if branch != DEFAULT_BRANCH:
+            console.print(
+                f"[bold red]❌ Refusing to release from non-{DEFAULT_BRANCH} branch: {branch}[/bold red]"
+            )
+            raise ReleaseError(f"Releases must run from {DEFAULT_BRANCH}, not {branch}")
+
+        # Operate from the repo root so all relative paths and uv commands
+        # behave the same regardless of where the user invoked this script.
+        os.chdir(get_repo_root())
 
         # Phase 2: Bump
         console.print(f"🚀 [blue]Bumping version ({increment.value})...[/blue]")
@@ -146,17 +173,18 @@ def main(
         run(["git", "commit", "-m", f"chore: release {tag_name}"], capture=False)
         run(["git", "tag", "-a", tag_name, "-m", tag_name], capture=False)
 
-        # Phase 4: Push (roll back local commit and tag on failure)
+        # Phase 4: Push (atomic — branch and tag succeed or fail together)
         console.print(f"⬆️  [blue]Pushing to {remote}/{branch}...[/blue]")
         try:
-            run(["git", "push", remote, branch], capture=False)
-            run(["git", "push", remote, tag_name], capture=False)
+            run(["git", "push", "--atomic", remote, branch, tag_name], capture=False)
         except ReleaseError:
             console.print(
                 "[yellow]⚠️ Push failed — rolling back local commit and tag...[/yellow]"
             )
-            subprocess.run(["git", "tag", "-d", tag_name], capture_output=True)
-            subprocess.run(["git", "reset", "--soft", "HEAD~1"], capture_output=True)
+            best_effort(["git", "tag", "-d", tag_name], "Deleting local tag")
+            best_effort(
+                ["git", "reset", "--mixed", "HEAD~1"], "Reverting release commit"
+            )
             raise
 
         # Phase 5: GitHub Release
