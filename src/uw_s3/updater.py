@@ -85,7 +85,7 @@ def check_and_update() -> None:
         print("Update failed.")
         return
 
-    exe = shutil.which("uw-s3")
+    exe = shutil.which("uws3")
     if exe:
         print(f"Updated to v{latest}. Restarting...")
         os.environ[_SKIP_UPDATE_ENV] = "1"

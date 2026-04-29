@@ -10,12 +10,12 @@ Requires [uv](https://docs.astral.sh/uv/).
 curl -LsSf https://raw.githubusercontent.com/jasonlo/uw-s3/main/scripts/install.sh | sh
 ```
 
-The installer will set up `uw-s3`, prompt for your S3 credentials, and optionally install rclone for mount support.
+The installer will set up `uws3`, prompt for your S3 credentials, and optionally install rclone for mount support.
 
 Once installed, run from anywhere:
 
 ```bash
-uw-s3
+uws3
 ```
 
 ### Manual install

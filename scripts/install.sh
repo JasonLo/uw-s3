@@ -23,7 +23,7 @@ if [ -f "$ENV_FILE" ]; then
         *)
             echo "Keeping existing credentials."
             echo
-            echo "Done! Run 'uw-s3' to start."
+            echo "Done! Run 'uws3' to start."
             exit 0
             ;;
     esac
@@ -73,4 +73,4 @@ else
 fi
 
 echo
-echo "Done! Run 'uw-s3' to start."
+echo "Done! Run 'uws3' to start."

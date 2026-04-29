@@ -20,7 +20,7 @@ uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the
 
 ```bash
 uv sync                  # Install dependencies
-uv run uw-s3             # Run the TUI (requires .env with S3 credentials)
+uv run uws3              # Run the TUI (requires .env with S3 credentials)
 uv run pytest            # Run tests
 uv run pytest -k "name"  # Run a single test by name
 uv run ruff check .      # Lint
