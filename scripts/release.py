@@ -130,7 +130,9 @@ def main(
             flags=re.MULTILINE,
         )
         if updated == init_text:
-            console.print("[bold red]❌ Could not find __version__ in __init__.py[/bold red]")
+            console.print(
+                "[bold red]❌ Could not find __version__ in __init__.py[/bold red]"
+            )
             raise ReleaseError("__version__ not found in __init__.py")
         init_path.write_text(updated)
         console.print(f"[green]✅ Updated __version__ to {new_version}[/green]")
@@ -160,7 +162,15 @@ def main(
         # Phase 5: GitHub Release
         console.print(f"🐙 [blue]Creating GitHub release {tag_name}...[/blue]")
         run(
-            ["gh", "release", "create", tag_name, "--title", tag_name, "--generate-notes"],
+            [
+                "gh",
+                "release",
+                "create",
+                tag_name,
+                "--title",
+                tag_name,
+                "--generate-notes",
+            ],
             capture=False,
         )
 

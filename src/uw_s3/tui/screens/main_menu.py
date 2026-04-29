@@ -1,8 +1,5 @@
 """Main menu screen."""
 
-import os
-import threading
-
 from rich.console import Group
 from rich.text import Text
 
@@ -12,6 +9,9 @@ from textual.widgets import Footer, Header, OptionList
 from textual.widgets.option_list import Option
 
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.bucket_management import BucketManagementScreen
+from uw_s3.tui.screens.file_manager import FileManagerScreen
+from uw_s3.tui.screens.mount import MountScreen
 
 
 def _option(key: str, title: str, desc: str) -> Group:
@@ -95,19 +95,13 @@ class MainMenuScreen(S3Screen):
         self.query_one("#menu", OptionList).focus()
 
     def action_file_manager(self) -> None:
-        from uw_s3.tui.screens.file_manager import FileManagerScreen
-
         self.app.push_screen(FileManagerScreen())
 
     def action_bucket_management(self) -> None:
-        from uw_s3.tui.screens.bucket_management import BucketManagementScreen
-
         self.app.push_screen(BucketManagementScreen())
 
     def action_quit(self) -> None:
-        self.s3_app.cleanup_mounts()
         self.app.exit()
-        threading.Timer(1.0, os._exit, args=(0,)).start()
 
     def action_cursor_up(self) -> None:
         self.query_one("#menu", OptionList).action_cursor_up()
@@ -116,6 +110,4 @@ class MainMenuScreen(S3Screen):
         self.query_one("#menu", OptionList).action_cursor_down()
 
     def action_mount_bucket(self) -> None:
-        from uw_s3.tui.screens.mount import MountScreen
-
         self.app.push_screen(MountScreen())

@@ -282,6 +282,3 @@ class MountScreen(S3Screen):
             status.update("[dim]Not mounted[/]")
             mount_btn.disabled = False
             unmount_btn.disabled = True
-
-    def action_pop_screen(self) -> None:
-        self.app.pop_screen()

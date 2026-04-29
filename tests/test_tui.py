@@ -12,7 +12,7 @@ from uw_s3.tui.screens.main_menu import MainMenuScreen
 
 def _make_app() -> UWS3App:
     """Create a UWS3App with a mocked Minio client."""
-    with patch("uw_s3.Minio"):
+    with patch("uw_s3.client.Minio"):
         return UWS3App(access_key="test", secret_key="test")
 
 

@@ -37,10 +37,11 @@ The app reads `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `.env` in the c
 
 ```
 src/uw_s3/
-├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
+├── __init__.py          # Re-exports UWS3, ObjectInfo, endpoint constants, __version__
+├── client.py            # UWS3 class — wraps MinIO client with convenience methods
 ├── cli.py               # Entry point: loads .env, checks for updates, restores saved endpoint, creates UWS3App, calls app.run()
 ├── updater.py           # Auto-update — compares installed version against latest GitHub tag
-├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
+├── rclone.py            # RcloneMount — spawns rclone in its own process group, passes creds via env
 ├── preferences.py       # JSON persistence in ~/.config/uw-s3/preferences.json (endpoint, last_bucket)
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
@@ -68,5 +69,5 @@ src/uw_s3/
 - **Screen navigation:** `push_screen()` / `pop_screen()` with `Binding("escape", "pop_screen", "Back")` on sub-screens.
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.
 - **Sync comparison:** Size-based only (not content hashes). `SyncEngine.status_push/pull()` for dry-run, `.push()/.pull()` for execution.
-- **Mount cleanup:** `UWS3App.on_unmount()` terminates all rclone subprocesses and removes temp config files on exit.
+- **Mount cleanup:** `UWS3App.on_unmount()` terminates each rclone process group (SIGTERM → SIGKILL fallback) on exit. Credentials are passed via `RCLONE_CONFIG_UWS3_*` env vars, never written to disk.
 - **rclone is external:** Not a Python dependency — must be on PATH. The mount screen checks `shutil.which("rclone")` and disables mount if missing.

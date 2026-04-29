@@ -1,7 +1,5 @@
 """Tests for rclone wrapper."""
 
-import os
-import stat
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -22,25 +20,18 @@ def _make_mount(**overrides: object) -> RcloneMount:
     return RcloneMount(**defaults)  # type: ignore[arg-type]
 
 
-def test_write_config_permissions() -> None:
+def test_build_env_carries_credentials_inline() -> None:
     rm = _make_mount(
         access_key="testkey",
         secret_key="testsecret",
-        bucket="test-bucket",
-        mount_point="/tmp/test-mount",
+        endpoint="campus.s3.wisc.edu",
     )
-    path = rm._write_config()
-    try:
-        mode = os.stat(path).st_mode
-        assert not (mode & stat.S_IRGRP), "group should not have read"
-        assert not (mode & stat.S_IROTH), "others should not have read"
-
-        content = path.read_text()
-        assert "testkey" in content
-        assert "testsecret" in content
-        assert "campus.s3.wisc.edu" in content
-    finally:
-        path.unlink()
+    env = rm._build_env()
+    assert env["RCLONE_CONFIG_UWS3_ACCESS_KEY_ID"] == "testkey"
+    assert env["RCLONE_CONFIG_UWS3_SECRET_ACCESS_KEY"] == "testsecret"
+    assert env["RCLONE_CONFIG_UWS3_ENDPOINT"] == "https://campus.s3.wisc.edu"
+    assert env["RCLONE_CONFIG_UWS3_TYPE"] == "s3"
+    assert env["RCLONE_CONFIG_UWS3_PROVIDER"] == "Other"
 
 
 def test_is_mounted_false_initially() -> None:
@@ -58,7 +49,7 @@ def test_mount_raises_when_rclone_not_found(tmp_path) -> None:
 def test_mount_raises_when_already_mounted(tmp_path) -> None:
     rm = _make_mount(mount_point=str(tmp_path / "mnt"))
     rm._process = MagicMock()
-    rm._process.poll.return_value = None  # still running
+    rm._process.poll.return_value = None
 
     with pytest.raises(RuntimeError, match="already mounted"):
         rm.mount()
@@ -69,7 +60,7 @@ def test_mount_raises_when_already_mounted(tmp_path) -> None:
 def test_mount_spawns_rclone(mock_find, mock_popen, tmp_path) -> None:
     rm = _make_mount(mount_point=str(tmp_path / "mnt"))
     mock_proc = MagicMock()
-    mock_proc.poll.return_value = None  # simulate running process
+    mock_proc.poll.return_value = None
     mock_popen.return_value = mock_proc
 
     rm.mount()
@@ -79,53 +70,64 @@ def test_mount_spawns_rclone(mock_find, mock_popen, tmp_path) -> None:
     args = mock_popen.call_args[0][0]
     assert args[0] == "/usr/bin/rclone"
     assert "mount" in args
-    assert rm._config_file is not None
-    rm._cleanup_config()
+    assert "uws3:b" in args
+    kwargs = mock_popen.call_args.kwargs
+    assert kwargs["start_new_session"] is True
+    assert "RCLONE_CONFIG_UWS3_ACCESS_KEY_ID" in kwargs["env"]
 
 
-def test_unmount_terminates_process() -> None:
-    rm = _make_mount()
+@patch("uw_s3.rclone.subprocess.Popen")
+@patch("uw_s3.rclone.find_rclone", return_value="/usr/bin/rclone")
+def test_mount_raises_with_stderr_when_rclone_exits_early(
+    mock_find, mock_popen, tmp_path
+) -> None:
+    rm = _make_mount(mount_point=str(tmp_path / "mnt"))
     mock_proc = MagicMock()
-    mock_proc.wait.return_value = 0
-    rm._process = mock_proc
-    rm._config_file = None
+    mock_proc.poll.return_value = 1
+    mock_proc.stderr = MagicMock()
+    mock_proc.stderr.read.return_value = b"bad endpoint\n"
+    mock_popen.return_value = mock_proc
 
-    with patch("uw_s3.rclone.subprocess.run"):
-        rm.unmount()
-
-    mock_proc.terminate.assert_called_once()
+    with pytest.raises(RuntimeError, match="bad endpoint"):
+        rm.mount()
     assert rm._process is None
 
 
-def test_unmount_kills_on_timeout() -> None:
+@patch("uw_s3.rclone.os.killpg")
+def test_unmount_terminates_process_group(mock_killpg) -> None:
     rm = _make_mount()
     mock_proc = MagicMock()
-    mock_proc.wait.side_effect = [subprocess.TimeoutExpired("rclone", 5), 0]
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 1234
+    mock_proc.wait.return_value = 0
+    mock_proc.stderr = MagicMock()
     rm._process = mock_proc
-    rm._config_file = None
 
     with patch("uw_s3.rclone.subprocess.run"):
         rm.unmount()
 
-    mock_proc.terminate.assert_called_once()
-    mock_proc.kill.assert_called_once()
+    mock_killpg.assert_called_once()
+    assert rm._process is None
 
 
-def test_unmount_cleans_up_config(tmp_path) -> None:
+@patch("uw_s3.rclone.os.killpg")
+def test_unmount_kills_on_timeout(mock_killpg) -> None:
     rm = _make_mount()
-    config = tmp_path / "rclone.conf"
-    config.write_text("[uw-s3]")
-    rm._process = None
-    rm._config_file = config
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 1234
+    mock_proc.wait.side_effect = [subprocess.TimeoutExpired("rclone", 5), 0]
+    mock_proc.stderr = MagicMock()
+    rm._process = mock_proc
 
     with patch("uw_s3.rclone.subprocess.run"):
         rm.unmount()
 
-    assert not config.exists()
-    assert rm._config_file is None
+    # First call SIGTERMs the group, second call SIGKILLs after timeout.
+    assert mock_killpg.call_count == 2
 
 
 def test_unmount_noop_when_not_mounted() -> None:
     rm = _make_mount()
     with patch("uw_s3.rclone.subprocess.run"):
-        rm.unmount()  # should not raise
+        rm.unmount()

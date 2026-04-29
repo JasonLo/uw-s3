@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 from rich.text import Text
 
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
 
@@ -47,10 +48,7 @@ class S3Screen(Screen):
 
     def ui(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         """Call a function on the main thread from a worker."""
-        try:
-            return self.app.call_from_thread(fn, *args, **kwargs)
-        except Exception:
-            return None
+        return self.app.call_from_thread(fn, *args, **kwargs)
 
     def action_pop_screen(self) -> None:
         self.workers.cancel_all()
@@ -59,7 +57,7 @@ class S3Screen(Screen):
     def _update_endpoint_bar(self) -> None:
         try:
             bar = self.query_one(EndpointBar)
-        except Exception:
+        except NoMatches:
             return
         ep = self.s3_app.endpoint_label
         hint = (

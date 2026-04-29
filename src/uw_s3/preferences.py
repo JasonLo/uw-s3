@@ -14,7 +14,7 @@ def load_preferences() -> dict[str, Any]:
         return {}
     try:
         return json.loads(PREFS_FILE.read_text())
-    except json.JSONDecodeError, OSError:
+    except (json.JSONDecodeError, OSError):
         return {}
 
 

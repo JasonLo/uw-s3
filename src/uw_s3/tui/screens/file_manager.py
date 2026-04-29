@@ -27,6 +27,8 @@ from uw_s3.sync.config import add_mapping
 from uw_s3.sync.engine import SyncAction, SyncEngine
 from uw_s3.sync.models import SyncMap
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.confirm import ConfirmScreen
+from uw_s3.tui.screens.input_dialog import InputScreen
 
 
 class _SyncCancelled(Exception):
@@ -127,7 +129,9 @@ class FileManagerScreen(S3Screen):
     _current_prefix: str = ""
     _sync_cancelled: threading.Event
 
-    def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None) -> None:
+    def __init__(
+        self, name: str | None = None, id: str | None = None, classes: str | None = None
+    ) -> None:
         super().__init__(name=name, id=id, classes=classes)
         self._sync_cancelled = threading.Event()
 
@@ -581,8 +585,6 @@ class FileManagerScreen(S3Screen):
         )
         kind = "folder" if is_folder else "file"
 
-        from uw_s3.tui.screens.confirm import ConfirmScreen
-
         self.app.push_screen(
             ConfirmScreen(f"Delete {kind} '{display}' from {bucket}?"),
             callback=lambda confirmed: (
@@ -623,8 +625,6 @@ class FileManagerScreen(S3Screen):
 
         current_name = key.rstrip("/").rsplit("/", 1)[-1]
 
-        from uw_s3.tui.screens.input_dialog import InputScreen
-
         self.app.push_screen(
             InputScreen("New name:", current_name),
             callback=lambda new_name: (
@@ -645,8 +645,6 @@ class FileManagerScreen(S3Screen):
         if not key or key == "..":
             log.write_line("Highlight an S3 object or folder to move.")
             return
-
-        from uw_s3.tui.screens.input_dialog import InputScreen
 
         self.app.push_screen(
             InputScreen("New path:", key),
@@ -706,6 +704,3 @@ class FileManagerScreen(S3Screen):
 
     def action_refresh(self) -> None:
         self._load_buckets()
-
-    def action_pop_screen(self) -> None:
-        self.app.pop_screen()
