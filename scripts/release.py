@@ -6,7 +6,6 @@
 # ]
 # ///
 import os
-import re
 import subprocess
 import sys
 from enum import StrEnum
@@ -23,16 +22,21 @@ app = typer.Typer(help="Safe release manager for uw-s3.")
 
 DEFAULT_BRANCH = "main"
 
-# When this script runs via `uv run`, VIRTUAL_ENV is set to the script's
-# isolated cache environment. Strip it so `uv version` targets the project's
-# own .venv instead of installing everything into the cache env.
-_UV_ENV = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+
+def uv_env() -> dict[str, str]:
+    """Strip VIRTUAL_ENV so `uv` targets the project venv, not this script's cache env."""
+    return {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
 
 
 class Increment(StrEnum):
     major = "major"
     minor = "minor"
     patch = "patch"
+    alpha = "alpha"
+    beta = "beta"
+    rc = "rc"
+    post = "post"
+    dev = "dev"
 
 
 class ReleaseError(Exception):
@@ -80,7 +84,7 @@ def get_push_target() -> tuple[str, str]:
     return remote, branch
 
 
-def verify_git_state() -> None:
+def verify_git_state(remote: str) -> None:
     """Ensure the repo is clean and synced with remote."""
     console.print("🔍 [blue]Checking git status...[/blue]")
 
@@ -93,7 +97,7 @@ def verify_git_state() -> None:
         raise ReleaseError("Working directory is not clean")
 
     # 2. Check if local is synced with remote
-    run(["git", "fetch"])
+    run(["git", "fetch", remote])
     local_hash = run(["git", "rev-parse", "HEAD"])
     try:
         remote_hash = run(["git", "rev-parse", "@{u}"])
@@ -121,6 +125,15 @@ def verify_git_state() -> None:
     console.print("[green]✅ Git state is clean and synced.[/green]")
 
 
+def verify_quality() -> None:
+    """Run lint and tests so we never tag a broken release."""
+    console.print("🧹 [blue]Running ruff check...[/blue]")
+    run(["uv", "run", "ruff", "check", "."], capture=False, env=uv_env())
+    console.print("🧪 [blue]Running pytest...[/blue]")
+    run(["uv", "run", "pytest"], capture=False, env=uv_env())
+    console.print("[green]✅ Quality checks passed.[/green]")
+
+
 @app.command()
 def main(
     increment: Annotated[
@@ -129,7 +142,6 @@ def main(
 ) -> None:
     try:
         # Phase 1: Guards
-        verify_git_state()
         remote, branch = get_push_target()
         if branch != DEFAULT_BRANCH:
             console.print(
@@ -141,33 +153,18 @@ def main(
         # behave the same regardless of where the user invoked this script.
         os.chdir(get_repo_root())
 
+        verify_git_state(remote)
+        verify_quality()
+
         # Phase 2: Bump
         console.print(f"🚀 [blue]Bumping version ({increment.value})...[/blue]")
-        run(["uv", "version", "--bump", increment.value], capture=False, env=_UV_ENV)
-        new_version: str = run(["uv", "version", "--short"], env=_UV_ENV)
+        run(["uv", "version", "--bump", increment.value], capture=False, env=uv_env())
+        new_version: str = run(["uv", "version", "--short"], env=uv_env())
         tag_name: str = f"v{new_version}"
-
-        # Phase 2b: Sync __version__ in __init__.py
-        init_path = Path("src/uw_s3/__init__.py")
-        init_text = init_path.read_text()
-        updated = re.sub(
-            r'^__version__\s*=\s*"[^"]*"',
-            f'__version__ = "{new_version}"',
-            init_text,
-            flags=re.MULTILINE,
-        )
-        if updated == init_text:
-            console.print(
-                "[bold red]❌ Could not find __version__ in __init__.py[/bold red]"
-            )
-            raise ReleaseError("__version__ not found in __init__.py")
-        init_path.write_text(updated)
-        console.print(f"[green]✅ Updated __version__ to {new_version}[/green]")
 
         # Phase 3: Commit and Tag
         console.print(f"📦 [blue]Creating tag {tag_name}...[/blue]")
         run(["git", "add", "pyproject.toml"])
-        run(["git", "add", str(init_path)])
         if Path("uv.lock").exists():
             run(["git", "add", "uv.lock"])
         run(["git", "commit", "-m", f"chore: release {tag_name}"], capture=False)
@@ -189,18 +186,27 @@ def main(
 
         # Phase 5: GitHub Release
         console.print(f"🐙 [blue]Creating GitHub release {tag_name}...[/blue]")
-        run(
-            [
-                "gh",
-                "release",
-                "create",
-                tag_name,
-                "--title",
-                tag_name,
-                "--generate-notes",
-            ],
-            capture=False,
-        )
+        try:
+            run(
+                [
+                    "gh",
+                    "release",
+                    "create",
+                    tag_name,
+                    "--title",
+                    tag_name,
+                    "--generate-notes",
+                ],
+                capture=False,
+            )
+        except ReleaseError:
+            console.print(
+                f"[yellow]⚠️ The tag {tag_name} is already pushed. Re-run manually with:[/yellow]"
+            )
+            console.print(
+                f"[yellow]  gh release create {tag_name} --title {tag_name} --generate-notes[/yellow]"
+            )
+            raise
 
         console.print(
             f"\n[bold green]✨ Successfully released {tag_name}![/bold green]"
