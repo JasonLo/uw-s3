@@ -31,16 +31,17 @@ Requires Python >=3.14 and `uv` as the package manager.
 
 ## Credentials
 
-The app reads `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `.env` (via python-dotenv). Optional `S3_ENDPOINT` can be `campus` (default, UW network/VPN) or `web` (public).
+The app reads `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `.env` in the current directory and `~/.config/uw-s3/.env` (via python-dotenv). Optional `S3_ENDPOINT` can be `campus` (default, UW network/VPN) or `web` (public).
 
 ## Architecture
 
 ```
 src/uw_s3/
 ├── __init__.py          # UWS3 class — wraps MinIO client with convenience methods
-├── cli.py               # Entry point: loads .env, checks for updates, creates UWS3App, calls app.run()
+├── cli.py               # Entry point: loads .env, checks for updates, restores saved endpoint, creates UWS3App, calls app.run()
 ├── updater.py           # Auto-update — compares installed version against latest GitHub tag
 ├── rclone.py            # RcloneMount — generates temp rclone config, spawns rclone mount subprocess
+├── preferences.py       # JSON persistence in ~/.config/uw-s3/preferences.json (endpoint, last_bucket)
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
 │   ├── models.py        # SyncMap dataclass (local_dir ↔ bucket mapping, auto-hashed ID)
@@ -49,15 +50,16 @@ src/uw_s3/
 └── tui/
     ├── app.py           # UWS3App (Textual App) — holds UWS3 client + active_mounts dict
     └── screens/
-        ├── base.py            # S3Screen — base screen with typed app access + threading helper
-        ├── main_menu.py       # Landing screen — endpoint switcher + navigation
+        ├── base.py              # S3Screen — base screen with typed app access + threading helper
+        ├── main_menu.py         # Landing screen — endpoint switcher + navigation
         ├── bucket_management.py # Bucket CRUD — list, create, delete, set permissions
-        ├── file_manager.py    # Unified file manager — browse, upload/download, sync
-        ├── confirm.py         # Reusable confirmation dialog
-        └── mount.py           # rclone mount controls
+        ├── file_manager.py      # Unified file manager — browse, upload/download, sync
+        ├── confirm.py           # Reusable confirmation dialog
+        ├── input_dialog.py      # Generic single-field modal input prompt
+        └── mount.py             # rclone mount controls
 ```
 
-**Data flow:** `cli.py` → `UWS3App` (holds credentials + `UWS3` client) → screens access `app.s3` for all S3 operations.
+**Data flow:** `cli.py` → `UWS3App` (holds credentials + `UWS3` client) → screens access `app.s3` for all S3 operations. User preferences (endpoint, last bucket) are persisted via `preferences.py` and restored on the next launch.
 
 ## Key Patterns
 
