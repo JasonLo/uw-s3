@@ -18,6 +18,20 @@ class SyncAction:
     reason: str  # e.g. "missing on S3", "size differs"
 
 
+@dataclass
+class SyncSummary:
+    """Aggregate result of a dry-run diff between local and remote."""
+
+    actions: list[SyncAction]
+    in_sync: int
+    new: int
+    size_differs: int
+
+    @property
+    def to_transfer(self) -> int:
+        return len(self.actions)
+
+
 class SyncEngine:
     """Simple push/pull sync between a local folder and an S3 bucket."""
 
@@ -55,29 +69,48 @@ class SyncEngine:
             result[name] = size
         return result
 
-    def status_push(self) -> list[SyncAction]:
-        """Dry-run: what would be pushed (local → S3)."""
+    def _diff(self, direction: Literal["push", "pull"]) -> SyncSummary:
+        """Compute a sync summary for the given direction."""
         local = self._local_files()
         remote = self._remote_objects()
+        if direction == "push":
+            source, dest = local, remote
+            missing_reason = "missing on S3"
+        else:
+            source, dest = remote, local
+            missing_reason = "missing locally"
         actions: list[SyncAction] = []
-        for rel, size in sorted(local.items()):
-            if rel not in remote:
-                actions.append(SyncAction(rel, "push", "missing on S3"))
-            elif remote[rel] != size:
-                actions.append(SyncAction(rel, "push", "size differs"))
-        return actions
+        in_sync = 0
+        new = 0
+        size_differs = 0
+        for rel, size in sorted(source.items()):
+            if rel not in dest:
+                actions.append(SyncAction(rel, direction, missing_reason))
+                new += 1
+            elif dest[rel] != size:
+                actions.append(SyncAction(rel, direction, "size differs"))
+                size_differs += 1
+            else:
+                in_sync += 1
+        return SyncSummary(
+            actions=actions, in_sync=in_sync, new=new, size_differs=size_differs
+        )
+
+    def summary_push(self) -> SyncSummary:
+        """Dry-run: summary of what would be pushed (local → S3)."""
+        return self._diff("push")
+
+    def summary_pull(self) -> SyncSummary:
+        """Dry-run: summary of what would be pulled (S3 → local)."""
+        return self._diff("pull")
+
+    def status_push(self) -> list[SyncAction]:
+        """Dry-run: what would be pushed (local → S3)."""
+        return self.summary_push().actions
 
     def status_pull(self) -> list[SyncAction]:
         """Dry-run: what would be pulled (S3 → local)."""
-        local = self._local_files()
-        remote = self._remote_objects()
-        actions: list[SyncAction] = []
-        for rel, size in sorted(remote.items()):
-            if rel not in local:
-                actions.append(SyncAction(rel, "pull", "missing locally"))
-            elif local[rel] != size:
-                actions.append(SyncAction(rel, "pull", "size differs"))
-        return actions
+        return self.summary_pull().actions
 
     def push(
         self,

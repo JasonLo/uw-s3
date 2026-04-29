@@ -33,6 +33,9 @@ class _SyncCancelled(Exception):
     """Raised when the user cancels a sync operation."""
 
 
+PREVIEW_FULL_LIST_LIMIT = 20
+
+
 def _human_size(size: int) -> str:
     """Format bytes into a human-readable string."""
     fsize: float = size
@@ -349,20 +352,36 @@ class FileManagerScreen(S3Screen):
             return
         engine, log = result
         arrow = "\u25b2" if direction == "push" else "\u25bc"
-        status_fn = engine.status_push if direction == "push" else engine.status_pull
+        verb = "upload" if direction == "push" else "download"
+        summary_fn = engine.summary_push if direction == "push" else engine.summary_pull
         try:
-            actions = status_fn()
+            summary = summary_fn()
             self.ui(log.clear)
-            if not actions:
-                self.ui(log.write_line, f"Nothing to {direction} \u2014 all in sync.")
-            else:
+            if summary.to_transfer == 0:
                 self.ui(
-                    log.write_line, f"{len(actions)} file(s) would be {direction}ed:"
+                    log.write_line,
+                    f"Nothing to {direction} \u2014 "
+                    f"{summary.in_sync} file(s) already in sync.",
                 )
-                for a in actions:
+                return
+            header = (
+                f"{direction.capitalize()} preview: "
+                f"{summary.in_sync} in sync, "
+                f"{summary.to_transfer} to {verb} "
+                f"({summary.new} new, {summary.size_differs} size differs)"
+            )
+            self.ui(log.write_line, header)
+            if summary.to_transfer <= PREVIEW_FULL_LIST_LIMIT:
+                for a in summary.actions:
                     self.ui(
                         log.write_line, f"  {arrow} {a.relative_path}  ({a.reason})"
                     )
+            else:
+                self.ui(
+                    log.write_line,
+                    f"  (file list hidden \u2014 {summary.to_transfer} files; "
+                    f"run {direction} to apply)",
+                )
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
 

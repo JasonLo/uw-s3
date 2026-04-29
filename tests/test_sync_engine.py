@@ -190,3 +190,47 @@ def test_pull_with_prefix(tmp_path: Path) -> None:
     client.download_file.assert_called_once_with(
         "b", "data/file.txt", tmp_path / "file.txt"
     )
+
+
+def test_summary_push_counts_in_sync_and_new(tmp_path: Path) -> None:
+    (tmp_path / "match.txt").write_bytes(b"abc")
+    (tmp_path / "new.txt").write_bytes(b"xyz")
+
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(_mock_client([("match.txt", 3)]), mapping)
+
+    summary = engine.summary_push()
+    assert summary.in_sync == 1
+    assert summary.new == 1
+    assert summary.size_differs == 0
+    assert summary.to_transfer == 1
+    assert summary.actions[0].relative_path == "new.txt"
+
+
+def test_summary_push_counts_size_differs(tmp_path: Path) -> None:
+    (tmp_path / "data.bin").write_bytes(b"abcde")
+
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(_mock_client([("data.bin", 999)]), mapping)
+
+    summary = engine.summary_push()
+    assert summary.in_sync == 0
+    assert summary.new == 0
+    assert summary.size_differs == 1
+    assert summary.to_transfer == 1
+
+
+def test_summary_pull_counts_in_sync(tmp_path: Path) -> None:
+    (tmp_path / "match.txt").write_bytes(b"abc")
+
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(
+        _mock_client([("match.txt", 3), ("remote-only.txt", 10)]), mapping
+    )
+
+    summary = engine.summary_pull()
+    assert summary.in_sync == 1
+    assert summary.new == 1
+    assert summary.size_differs == 0
+    assert summary.to_transfer == 1
+    assert summary.actions[0].relative_path == "remote-only.txt"
