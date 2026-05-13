@@ -8,6 +8,11 @@ from typing import Literal
 from uw_s3 import UWS3
 from uw_s3.sync.models import SyncMap
 
+ScanPhase = Literal["local", "remote", "compare"]
+ProgressCallback = Callable[[ScanPhase, int], None]
+
+_PROGRESS_INTERVAL = 25
+
 
 @dataclass
 class SyncAction:
@@ -47,32 +52,56 @@ class SyncEngine:
             return f"{prefix}/{rel_path}"
         return rel_path
 
-    def _local_files(self) -> dict[str, int]:
+    def _local_files(self, progress: ProgressCallback | None = None) -> dict[str, int]:
         """Return {relative_posix_path: size} for all files in local dir."""
         result: dict[str, int] = {}
+        count = 0
+        if progress:
+            progress("local", 0)
         for p in self.local.rglob("*"):
             if p.is_file():
                 rel = p.relative_to(self.local).as_posix()
                 result[rel] = p.stat().st_size
+                count += 1
+                if progress and count % _PROGRESS_INTERVAL == 0:
+                    progress("local", count)
+        if progress:
+            progress("local", count)
         return result
 
-    def _remote_objects(self) -> dict[str, int]:
+    def _remote_objects(
+        self, progress: ProgressCallback | None = None
+    ) -> dict[str, int]:
         """Return {relative_path: size} for all objects under the prefix."""
         prefix = self.mapping.prefix.rstrip("/")
         prefix_with_slash = f"{prefix}/" if prefix else ""
         result: dict[str, int] = {}
-        for name, size in self.client.list_objects_with_size(
+        count = 0
+        if progress:
+            progress("remote", 0)
+        for name, size in self.client.iter_objects_with_size(
             self.mapping.bucket, prefix=prefix_with_slash, recursive=True
         ):
             if prefix_with_slash and name.startswith(prefix_with_slash):
                 name = name[len(prefix_with_slash) :]
             result[name] = size
+            count += 1
+            if progress and count % _PROGRESS_INTERVAL == 0:
+                progress("remote", count)
+        if progress:
+            progress("remote", count)
         return result
 
-    def _diff(self, direction: Literal["push", "pull"]) -> SyncSummary:
+    def _diff(
+        self,
+        direction: Literal["push", "pull"],
+        progress: ProgressCallback | None = None,
+    ) -> SyncSummary:
         """Compute a sync summary for the given direction."""
-        local = self._local_files()
-        remote = self._remote_objects()
+        local = self._local_files(progress)
+        remote = self._remote_objects(progress)
+        if progress:
+            progress("compare", 0)
         if direction == "push":
             source, dest = local, remote
             missing_reason = "missing on S3"
@@ -96,21 +125,21 @@ class SyncEngine:
             actions=actions, in_sync=in_sync, new=new, size_differs=size_differs
         )
 
-    def summary_push(self) -> SyncSummary:
+    def summary_push(self, progress: ProgressCallback | None = None) -> SyncSummary:
         """Dry-run: summary of what would be pushed (local → S3)."""
-        return self._diff("push")
+        return self._diff("push", progress)
 
-    def summary_pull(self) -> SyncSummary:
+    def summary_pull(self, progress: ProgressCallback | None = None) -> SyncSummary:
         """Dry-run: summary of what would be pulled (S3 → local)."""
-        return self._diff("pull")
+        return self._diff("pull", progress)
 
-    def status_push(self) -> list[SyncAction]:
+    def status_push(self, progress: ProgressCallback | None = None) -> list[SyncAction]:
         """Dry-run: what would be pushed (local → S3)."""
-        return self.summary_push().actions
+        return self.summary_push(progress).actions
 
-    def status_pull(self) -> list[SyncAction]:
+    def status_pull(self, progress: ProgressCallback | None = None) -> list[SyncAction]:
         """Dry-run: what would be pulled (S3 → local)."""
-        return self.summary_pull().actions
+        return self.summary_pull(progress).actions
 
     def push(
         self,

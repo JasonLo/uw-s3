@@ -1,6 +1,7 @@
 """UWS3 client — thin wrapper around MinIO with convenience methods."""
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +66,13 @@ class UWS3:
                 bucket, prefix=prefix, recursive=recursive
             )
         ]
+
+    def iter_objects_with_size(
+        self, bucket: str, *, prefix: str = "", recursive: bool = True
+    ) -> Iterator[tuple[str, int]]:
+        """Yield (object_name, size) pairs as the MinIO listing streams in."""
+        for obj in self.client.list_objects(bucket, prefix=prefix, recursive=recursive):
+            yield obj.object_name, obj.size or 0
 
     def list_objects_detail(
         self, bucket: str, *, prefix: str = "", recursive: bool = True

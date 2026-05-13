@@ -10,7 +10,7 @@ from uw_s3.sync.models import SyncMap
 def _mock_client(remote_objects: list[tuple[str, int]]) -> MagicMock:
     """Create a mock UWS3 client with given remote objects."""
     client = MagicMock()
-    client.list_objects_with_size.return_value = remote_objects
+    client.iter_objects_with_size.side_effect = lambda *a, **kw: iter(remote_objects)
     return client
 
 
@@ -234,3 +234,40 @@ def test_summary_pull_counts_in_sync(tmp_path: Path) -> None:
     assert summary.size_differs == 0
     assert summary.to_transfer == 1
     assert summary.actions[0].relative_path == "remote-only.txt"
+
+
+def test_summary_push_invokes_progress_phases(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "b.txt").write_text("bb")
+
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(_mock_client([("a.txt", 1)]), mapping)
+
+    calls: list[tuple[str, int]] = []
+    engine.summary_push(progress=lambda phase, count: calls.append((phase, count)))
+
+    phases_seen = [phase for phase, _ in calls]
+    assert "local" in phases_seen
+    assert "remote" in phases_seen
+    assert "compare" in phases_seen
+    assert phases_seen.index("local") < phases_seen.index("remote")
+    assert phases_seen.index("remote") < phases_seen.index("compare")
+
+
+def test_progress_cancellation_propagates(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("x")
+
+    mapping = SyncMap(local_dir=str(tmp_path), bucket="b")
+    engine = SyncEngine(_mock_client([]), mapping)
+
+    class _Cancel(Exception):
+        pass
+
+    def progress(phase: str, count: int) -> None:
+        raise _Cancel
+
+    try:
+        engine.summary_push(progress=progress)
+    except _Cancel:
+        return
+    raise AssertionError("expected _Cancel to propagate from progress callback")

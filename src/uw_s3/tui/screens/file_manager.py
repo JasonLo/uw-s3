@@ -24,7 +24,7 @@ from textual.widgets import (
 )
 
 from uw_s3.sync.config import add_mapping
-from uw_s3.sync.engine import SyncAction, SyncEngine
+from uw_s3.sync.engine import ProgressCallback, ScanPhase, SyncAction, SyncEngine
 from uw_s3.sync.models import SyncMap
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
 from uw_s3.tui.screens.confirm import ConfirmScreen
@@ -36,6 +36,14 @@ class _SyncCancelled(Exception):
 
 
 PREVIEW_FULL_LIST_LIMIT = 20
+
+_SCAN_PHASE_LABELS = {
+    "local": "Scanning local files",
+    "remote": "Scanning S3 objects",
+    "compare": "Comparing",
+}
+
+_SCAN_THROTTLE_SECONDS = 0.1
 
 
 def _human_size(size: int) -> str:
@@ -358,8 +366,13 @@ class FileManagerScreen(S3Screen):
         arrow = "\u25b2" if direction == "push" else "\u25bc"
         verb = "upload" if direction == "push" else "download"
         summary_fn = engine.summary_push if direction == "push" else engine.summary_pull
+
+        self._sync_cancelled.clear()
+        self.ui(self._show_scan_overlay, direction, preview=True)
+        progress = self._make_scan_progress_callback()
+
         try:
-            summary = summary_fn()
+            summary = summary_fn(progress=progress)
             self.ui(log.clear)
             if summary.to_transfer == 0:
                 self.ui(
@@ -386,8 +399,12 @@ class FileManagerScreen(S3Screen):
                     f"  (file list hidden \u2014 {summary.to_transfer} files; "
                     f"run {direction} to apply)",
                 )
+        except _SyncCancelled:
+            self.ui(log.write_line, "Preview cancelled.")
         except Exception as exc:
             self.ui(log.write_line, f"Error: {exc}")
+        finally:
+            self.ui(self._hide_overlay)
 
     @staticmethod
     def _format_eta(seconds: float) -> str:
@@ -412,6 +429,43 @@ class FileManagerScreen(S3Screen):
         status.update(f"0 / {total}  ·  0%  ·  estimating...")
         bar.update(total=total, progress=0)
         overlay.add_class("visible")
+
+    def _show_scan_overlay(self, direction: str, *, preview: bool) -> None:
+        overlay = self.query_one("#sync-overlay")
+        card = self.query_one("#sync-card")
+        label = self.query_one("#sync-label", Label)
+        status = self.query_one("#sync-status", Label)
+        bar = self.query_one("#sync-bar", ProgressBar)
+        title = (
+            f"{direction.capitalize()} Preview"
+            if preview
+            else f"{direction.capitalize()}ing"
+        )
+        card.border_title = f" {title} "
+        label.update(f"Preparing {direction}...")
+        status.update("Scanning local files...")
+        bar.update(total=None)
+        overlay.add_class("visible")
+
+    def _update_scan_status(self, phase: ScanPhase, count: int) -> None:
+        label = _SCAN_PHASE_LABELS[phase]
+        suffix = "" if phase == "compare" else f" ({count:,} found)"
+        self.query_one("#sync-status", Label).update(f"{label}...{suffix}")
+
+    def _make_scan_progress_callback(self) -> ProgressCallback:
+        """Build a throttled progress callback for use from a worker thread."""
+        last_emit = 0.0
+
+        def progress(phase: ScanPhase, count: int) -> None:
+            nonlocal last_emit
+            if self._sync_cancelled.is_set():
+                raise _SyncCancelled
+            now = time.monotonic()
+            if count == 0 or now - last_emit > _SCAN_THROTTLE_SECONDS:
+                last_emit = now
+                self.ui(self._update_scan_status, phase, count)
+
+        return progress
 
     def _update_status(self, completed: int, total: int, started: float) -> None:
         pct = int(completed / total * 100)
@@ -444,8 +498,11 @@ class FileManagerScreen(S3Screen):
 
         bar = self.query_one("#sync-bar", ProgressBar)
         self._sync_cancelled.clear()
+        self.ui(self._show_scan_overlay, direction, preview=False)
+        completed = 0
+        total = 0
         try:
-            pending = status_fn()
+            pending = status_fn(progress=self._make_scan_progress_callback())
             total = len(pending)
             if total == 0:
                 self.ui(log.write_line, f"Nothing to {direction} — all in sync.")
@@ -453,8 +510,6 @@ class FileManagerScreen(S3Screen):
 
             self.ui(self._show_overlay, direction, total)
             started = time.monotonic()
-
-            completed = 0
 
             def on_file(a: SyncAction) -> None:
                 nonlocal completed
