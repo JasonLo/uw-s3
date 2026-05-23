@@ -127,17 +127,21 @@ def _unmount(mnt: Path) -> None:
 
 
 def _report_orphans() -> None:
-    for pattern in ("s3fs", "rclone"):
+    # pgrep -x matches the exact process name only (i.e. the s3fs-fuse or
+    # rclone binaries themselves) — not any shell whose command line happens
+    # to contain "s3fs". Python s3fs runs in-process so a clean result here
+    # means zero orphans for this backend.
+    for name in ("s3fs", "rclone"):
         with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
             result = subprocess.run(
-                ["pgrep", "-fa", pattern],
+                ["pgrep", "-x", name],
                 check=False,
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             out = result.stdout.strip() or "none"
-            print(f"orphans ({pattern}): {out}")
+            print(f"orphans ({name} binary): {out}")
 
 
 if __name__ == "__main__":

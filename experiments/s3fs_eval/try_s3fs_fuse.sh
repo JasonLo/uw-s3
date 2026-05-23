@@ -30,8 +30,10 @@ cleanup() {
   echo "Unmounting $MNT ..."
   fusermount -u "$MNT" 2>/dev/null || true
   rmdir "$MNT" 2>/dev/null || true
-  echo "Orphans (s3fs): $(pgrep -fa s3fs || echo none)"
-  echo "Orphans (rclone): $(pgrep -fa rclone || echo none)"
+  # pgrep -x matches exact process name only — avoids the shell's own
+  # command line (which contains "s3fs") showing up as a false positive.
+  echo "Orphans (s3fs binary): $(pgrep -x s3fs || echo none)"
+  echo "Orphans (rclone binary): $(pgrep -x rclone || echo none)"
 }
 trap cleanup EXIT INT TERM
 
