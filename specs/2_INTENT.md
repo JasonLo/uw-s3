@@ -1,4 +1,4 @@
-# Intent Doc: Textual TUI best-practice audit
+# Intent Doc: S3 mount backend — replace rclone with s3fs
 
 - **Author:** clo36@wisc.edu
 - **Status:** Draft
@@ -6,30 +6,34 @@
 
 ## Problem
 
-`src/uw_s3/tui/` was built incrementally and has never been checked end-to-end against the official Textual guidance at https://textual.textualize.io/. Threading, reactives, screens, workers, and CSS were each added when needed, so we don't know which conventions we follow, which we violate, and which we've worked around with patterns that will rot on the next Textual release. We want a focused audit + remediation pass — no new features.
+The current rclone FUSE mount is brittle along three axes that blocked the previous intent's Mount-flow sign-off: (1) **process lifecycle** — orphan `rclone` survives app exit, `on_unmount` stalls the event loop, SIGTERM→SIGKILL teardown races; (2) **setup friction** — FUSE permissions, mountpoint creation, kernel-module variance across platforms; (3) **listing behavior** — empty/stale directory listings, slow first-list, files from outside clients don't appear. We want to prototype `s3fs-fuse` (external binary) and `s3fs` (Python fsspec library, in-process), pick the better fit, then remove rclone entirely.
 
 ## Outcome
 
-- **WHEN** the audit of `src/uw_s3/tui/` against the Textual official docs is complete, **THE SYSTEM SHALL** produce `experiments/tui_audit/findings.md` listing each deviation with a severity tag (`blocker` / `major` / `minor`) and a citation URL on the official Textual docs site.
-- **WHEN** remediation is finished, **THE SYSTEM SHALL** contain zero `blocker` and zero `major` findings; remaining `minor` items are either fixed in code or recorded as accepted exceptions in `specs/3_DECISIONS.md`.
-- **WHEN** any blocking S3, filesystem, or subprocess call originates from the TUI, **THE SYSTEM SHALL** execute it inside a `@work(thread=True)` worker (or `@work()` async for coroutines) and route every UI mutation through `call_from_thread()` or `post_message()` — no direct cross-thread widget access.
-- **WHILE** remediation is in progress, **THE SYSTEM SHALL** preserve every existing user-facing flow (browse, sync, mount, bucket CRUD, endpoint switch), verified by completing every checkbox in `experiments/tui_audit/smoke_test.md` on both `campus` and `web` endpoints before the branch merges.
+- **WHEN** the user presses Mount on a bucket, **THE SYSTEM SHALL** surface its top-level contents at the chosen mountpoint within 3 seconds.
+- **WHEN** the user presses Unmount, **THE SYSTEM SHALL** release the mountpoint within 5 seconds and leave no orphan mount helpers (`pgrep -f s3fs` and `pgrep -f rclone` both return empty).
+- **WHEN** the app exits while a mount is active, **THE SYSTEM SHALL** clean up all mount processes within 5 seconds without blocking the Textual event loop (Constitution §4 still binds).
+- **WHEN** the chosen backend lands on `main`, **THE SYSTEM SHALL** contain no `rclone.py`, no `RcloneMount`, no `RCLONE_CONFIG_UWS3_*` env wiring, and no reference to `rclone` in source or `pyproject.toml`.
+- **WHEN** the new backend is in place, **THE SYSTEM SHALL** have every Mount checkbox in `experiments/tui_audit/smoke_test.md` verified on both `campus` and `web` endpoints, with the Sign-off block filled in.
 
 ## Non-Goals
 
-- NOT adding new TUI features or screens.
-- NOT redesigning visual style or CSS layout.
-- NOT changing the CLI surface or external integrations (`rclone`, `minio`).
-- NOT switching TUI frameworks or doing a Textual major-version upgrade in this pass.
+- NOT adding mount features beyond 1:1 rclone parity (no read-write tiering, no shared mounts, no auto-remount on connection drop).
+- NOT changing the credentials model — still env / `.env` only, per Constitution §9.
+- NOT touching the file-manager browse path or sync engine — they remain S3-API based, independent of mount.
+- NOT keeping rclone as a fallback after the migration ships.
+- NOT supporting Windows-native mounts; WSL2 + Linux + macOS only.
+- NOT bundling `s3fs-fuse` as a Python dep — it stays an external binary on PATH (mirroring how rclone was treated).
 
 ## Constraints
 
-- Constitution §Architecture reinforces outcome 3 — this audit MUST NOT relax it.
-- Constitution §Stack: Python >=3.14, uv-managed, `ruff` clean.
-- Reference set is the official Textual docs at https://textual.textualize.io/ matching the version pinned in `pyproject.toml` (`textual>=4.0.0`).
-- Every finding MUST cite a source URL; "I think this is bad" rules are out.
+- **Constitution §4** — mount lifecycle calls from the TUI MUST run on `@work(thread=True)` with UI updates via `call_from_thread()`.
+- **Constitution §8 conflict** — §8 names rclone explicitly. Full removal makes §8 moot post-merge; adopting Python `s3fs` would also violate §8's spirit ("mount helpers stay external, not Python deps"). Invoke `/ls-constitution` to generalize §8 before the chosen backend merges.
+- **Constitution §9** — credentials remain env-only; neither backend may write creds to disk.
+- Both s3fs flavors MUST be prototyped against `experiments/tui_audit/smoke_test.md#Mount` on both endpoints; the backend choice is data-driven from that exercise and logged in `specs/3_DECISIONS.md`.
+- Target platforms: Linux (incl. WSL2 with fuse3), macOS optional. No Windows-native FUSE.
+- `s3fs-fuse` and Python `s3fs` MUST both honor the existing `S3_ENDPOINT` switch (`campus` ↔ `web`).
 
 ## Change Log
 
-- **2026-05-22** — Initial draft.
-- **2026-05-22** — Outcome 4 now cites `experiments/tui_audit/smoke_test.md` as the regression checklist. Reason: make the "preserve every flow" outcome falsifiable.
+- **2026-05-22** — Initial draft. Picks up the Mount-flow follow-up deferred by the previous (Complete) Textual TUI audit intent.

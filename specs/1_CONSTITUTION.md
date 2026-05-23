@@ -24,7 +24,8 @@ This is a lean constitution for a small, rapid-prototyping Python project. It lo
 ## Boundaries
 
 7. The project MUST remain a single-user terminal TUI; a web UI, REST server, or background daemon MUST NOT be added.
-8. `rclone` MUST stay an external binary discovered on `PATH`; it MUST NOT be vendored, bundled, or wrapped as a Python dependency.
+8. ~~`rclone` MUST stay an external binary discovered on `PATH`; it MUST NOT be vendored, bundled, or wrapped as a Python dependency.~~ [superseded 2026-05-22]
+   FUSE mount helpers MAY be external binaries on `PATH` or in-process Python libraries. The mount backend MUST NOT block the Textual event loop (§4 still binds) and MUST NOT write S3 credentials to disk (§9 still binds).
 
 ## Security
 
@@ -33,3 +34,4 @@ This is a lean constitution for a small, rapid-prototyping Python project. It lo
 ## Amendments
 
 - **2026-05-22** — Initial constitution ratified.
+- **2026-05-22** — §8 generalized from rclone-specific to backend-agnostic. The durable safety invariants (no blocking the Textual event loop, no S3 credentials on disk) are kept; the choice between external-binary and in-process Python mount helpers is now data-driven per `specs/2_INTENT.md`. Reason: rclone is being replaced with one of two `s3fs` flavors, and the old §8 blocked both the rclone removal and the in-process candidate before evaluation could happen.
