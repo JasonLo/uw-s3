@@ -8,6 +8,7 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
+from textual.worker import NoActiveWorker, get_current_worker
 
 if TYPE_CHECKING:
     from uw_s3.tui.app import UWS3App
@@ -47,7 +48,13 @@ class S3Screen(Screen):
         return cast(UWS3App, self.app)
 
     def ui(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        """Call a function on the main thread from a worker."""
+        """Call a function on the main thread from a worker; no-op if cancelled."""
+        try:
+            worker = get_current_worker()
+        except NoActiveWorker:
+            return fn(*args, **kwargs)
+        if worker.is_cancelled:
+            return None
         return self.app.call_from_thread(fn, *args, **kwargs)
 
     def action_pop_screen(self) -> None:

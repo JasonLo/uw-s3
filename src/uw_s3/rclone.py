@@ -4,6 +4,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,6 +32,7 @@ class RcloneMount:
         self.bucket = bucket
         self.mount_point = Path(mount_point).expanduser().resolve()
         self._process: subprocess.Popen[bytes] | None = None
+        self.log_path: Path | None = None
 
     @property
     def is_mounted(self) -> bool:
@@ -62,8 +64,16 @@ class RcloneMount:
 
         self.mount_point.mkdir(parents=True, exist_ok=True)
 
+        log_fd, log_path = tempfile.mkstemp(
+            prefix=f"uws3-rclone-{self.bucket}-", suffix=".log"
+        )
+        os.close(log_fd)
+        self.log_path = Path(log_path)
+
         # start_new_session puts rclone (and any FUSE helpers it spawns) in its
         # own process group so we can clean the whole tree up on unmount.
+        # stderr/stdout go to a log file so the pipe buffer can't fill and block
+        # rclone (which previously left the mount alive but unresponsive).
         self._process = subprocess.Popen(
             [
                 rclone,
@@ -72,47 +82,63 @@ class RcloneMount:
                 str(self.mount_point),
                 "--vfs-cache-mode",
                 "full",
+                "--log-file",
+                str(self.log_path),
+                "--log-level",
+                "INFO",
             ],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             env=self._build_env(),
             start_new_session=True,
         )
 
-        # rclone backgrounds itself once the mount is healthy. Wait briefly:
-        # if it exits in this window, the mount failed and stderr has the reason.
-        deadline = time.monotonic() + 2.0
+        # rclone stays in the foreground; we poll for the mount to actually
+        # come up. If the process dies, or it never mounts within the deadline,
+        # the mount failed and the log file has the reason.
+        deadline = time.monotonic() + 10.0
         while time.monotonic() < deadline:
             if self._process.poll() is not None:
-                err = b""
-                if self._process.stderr is not None:
-                    err = self._process.stderr.read() or b""
-                self._process = None
-                msg = err.decode("utf-8", errors="replace").strip()
-                raise RuntimeError(
-                    f"rclone exited before mount was ready: {msg or '(no stderr)'}"
-                )
-            time.sleep(0.05)
+                self._raise_with_log("rclone exited before mount was ready")
+            if os.path.ismount(self.mount_point):
+                return
+            time.sleep(0.1)
+
+        # Process is alive but mount never appeared — tear down and surface log.
+        self._terminate_process()
+        self._raise_with_log("rclone did not establish a mount within 10s")
+
+    def _terminate_process(self) -> None:
+        proc = self._process
+        if proc is None:
+            return
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+        self._process = None
+
+    def _raise_with_log(self, prefix: str) -> None:
+        tail = ""
+        if self.log_path is not None and self.log_path.exists():
+            try:
+                tail = self.log_path.read_text(errors="replace").strip().splitlines()[-10:]
+                tail = "\n".join(tail)
+            except OSError:
+                tail = ""
+        log_hint = f" (full log: {self.log_path})" if self.log_path else ""
+        raise RuntimeError(f"{prefix}{log_hint}\n{tail}" if tail else f"{prefix}{log_hint}")
 
     def unmount(self) -> None:
         """Unmount the bucket and clean up subprocess + FUSE helpers."""
-        proc = self._process
-        if proc is not None and proc.poll() is None:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError, PermissionError:
-                proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError, PermissionError:
-                    proc.kill()
-                proc.wait(timeout=5)
-        if proc is not None and proc.stderr is not None:
-            proc.stderr.close()
-        self._process = None
+        self._terminate_process()
 
         # Belt-and-suspenders: if the kernel still has the mount, drop it.
         try:
@@ -121,5 +147,12 @@ class RcloneMount:
                 capture_output=True,
                 timeout=5,
             )
-        except FileNotFoundError, subprocess.TimeoutExpired:
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
+
+        if self.log_path is not None:
+            try:
+                self.log_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            self.log_path = None

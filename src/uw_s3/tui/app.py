@@ -1,5 +1,7 @@
 """Main Textual application for uw-s3."""
 
+import asyncio
+
 from textual.app import App
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
@@ -59,5 +61,6 @@ class UWS3App(App):
                 pass
         self.active_mounts.clear()
 
-    def on_unmount(self) -> None:
-        self.cleanup_mounts()
+    async def on_unmount(self) -> None:
+        if self.active_mounts:
+            await asyncio.to_thread(self.cleanup_mounts)

@@ -94,11 +94,15 @@ class MainMenuScreen(S3Screen):
         self._update_endpoint_bar()
         self.query_one("#menu", OptionList).focus()
 
+    def _push_unique(self, screen: S3Screen) -> None:
+        if not isinstance(self.app.screen, type(screen)):
+            self.app.push_screen(screen)
+
     def action_file_manager(self) -> None:
-        self.app.push_screen(FileManagerScreen())
+        self._push_unique(FileManagerScreen())
 
     def action_bucket_management(self) -> None:
-        self.app.push_screen(BucketManagementScreen())
+        self._push_unique(BucketManagementScreen())
 
     def action_quit(self) -> None:
         self.app.exit()
@@ -110,4 +114,4 @@ class MainMenuScreen(S3Screen):
         self.query_one("#menu", OptionList).action_cursor_down()
 
     def action_mount_bucket(self) -> None:
-        self.app.push_screen(MountScreen())
+        self._push_unique(MountScreen())

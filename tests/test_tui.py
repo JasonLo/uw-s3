@@ -42,7 +42,8 @@ async def test_quit_key() -> None:
     app = _make_app()
     async with app.run_test() as pilot:
         await pilot.press("q")
-        assert app.return_code is not None or app._exit
+        await pilot.pause()
+        assert app.return_code is not None or not app.is_running
 
 
 async def test_endpoint_switch() -> None:
@@ -115,6 +116,31 @@ async def test_confirm_screen_no() -> None:
         await pilot.click("#confirm-no")
         await pilot.pause()
         assert results == [False]
+
+
+async def test_confirm_screen_escape_dismisses_as_false() -> None:
+    app = _make_app()
+    results: list[bool | None] = []
+
+    async with app.run_test() as pilot:
+        app.push_screen(ConfirmScreen("Delete?"), callback=results.append)
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert results == [False]
+
+
+async def test_navigate_to_file_manager() -> None:
+    app = _make_app()
+    async with app.run_test() as pilot:
+        with patch.object(app.s3, "list_buckets", return_value=[]):
+            await pilot.press("2")
+            await pilot.pause()
+            from uw_s3.tui.screens.file_manager import FileManagerScreen
+
+            assert isinstance(app.screen, FileManagerScreen)
 
 
 async def test_unmount_cleans_active_mounts() -> None:

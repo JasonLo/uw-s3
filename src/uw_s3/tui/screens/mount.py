@@ -129,7 +129,7 @@ class MountScreen(S3Screen):
     def on_endpoint_switched(self) -> None:
         self._load_buckets()
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="load")
     def _load_buckets(self) -> None:
         table = self.query_one("#bucket-table", DataTable)
         try:
@@ -240,6 +240,8 @@ class MountScreen(S3Screen):
             rm.mount()
             self.s3_app.active_mounts[bucket] = rm
             self.ui(log.write_line, f"Mounted {bucket} at {resolved}")
+            if rm.log_path is not None:
+                self.ui(log.write_line, f"rclone log: {rm.log_path}")
             try:
                 sample = sorted(p.name for p in resolved.iterdir())[:5]
                 preview = ", ".join(sample) if sample else "(empty)"

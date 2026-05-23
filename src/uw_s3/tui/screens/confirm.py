@@ -2,6 +2,7 @@
 
 from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label
@@ -9,6 +10,8 @@ from textual.widgets import Button, Label
 
 class ConfirmScreen(ModalScreen[bool]):
     """Modal confirmation dialog."""
+
+    BINDINGS = [Binding("escape", "no", "Cancel")]
 
     CSS = """
     ConfirmScreen { align: center middle; }
@@ -34,5 +37,5 @@ class ConfirmScreen(ModalScreen[bool]):
         self.dismiss(True)
 
     @on(Button.Pressed, "#confirm-no")
-    def _no(self) -> None:
+    def action_no(self) -> None:
         self.dismiss(False)

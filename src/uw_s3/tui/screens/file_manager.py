@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Literal
 
-import threading
 import time
 
 from textual import on, work
@@ -22,6 +21,7 @@ from textual.widgets import (
     ProgressBar,
     Select,
 )
+from textual.worker import get_current_worker
 
 from uw_s3.sync.config import add_mapping
 from uw_s3.sync.engine import ProgressCallback, ScanPhase, SyncAction, SyncEngine
@@ -135,13 +135,6 @@ class FileManagerScreen(S3Screen):
     selected_local_path: str = ""
     _selected_s3_key: str = ""
     _current_prefix: str = ""
-    _sync_cancelled: threading.Event
-
-    def __init__(
-        self, name: str | None = None, id: str | None = None, classes: str | None = None
-    ) -> None:
-        super().__init__(name=name, id=id, classes=classes)
-        self._sync_cancelled = threading.Event()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -203,7 +196,7 @@ class FileManagerScreen(S3Screen):
 
     # --- data loading ---
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="load")
     def _load_buckets(self) -> None:
         try:
             buckets = self.s3_app.s3.list_buckets()
@@ -220,7 +213,7 @@ class FileManagerScreen(S3Screen):
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading buckets: {exc}")
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="load")
     def _load_objects(self, bucket: str) -> None:
         try:
             objects = self.s3_app.s3.list_objects_detail(
@@ -367,7 +360,6 @@ class FileManagerScreen(S3Screen):
         verb = "upload" if direction == "push" else "download"
         summary_fn = engine.summary_push if direction == "push" else engine.summary_pull
 
-        self._sync_cancelled.clear()
         self.ui(self._show_scan_overlay, direction, preview=True)
         progress = self._make_scan_progress_callback()
 
@@ -454,11 +446,12 @@ class FileManagerScreen(S3Screen):
 
     def _make_scan_progress_callback(self) -> ProgressCallback:
         """Build a throttled progress callback for use from a worker thread."""
+        worker = get_current_worker()
         last_emit = 0.0
 
         def progress(phase: ScanPhase, count: int) -> None:
             nonlocal last_emit
-            if self._sync_cancelled.is_set():
+            if worker.is_cancelled:
                 raise _SyncCancelled
             now = time.monotonic()
             if count == 0 or now - last_emit > _SCAN_THROTTLE_SECONDS:
@@ -483,7 +476,7 @@ class FileManagerScreen(S3Screen):
 
     @on(Button.Pressed, "#cancel-sync-btn")
     def _handle_cancel(self) -> None:
-        self._sync_cancelled.set()
+        self.workers.cancel_group(self, "sync")
 
     def _run_sync(self, direction: Literal["push", "pull"]) -> None:
         result = self._make_engine()
@@ -493,11 +486,11 @@ class FileManagerScreen(S3Screen):
         arrow = "\u25b2" if direction == "push" else "\u25bc"
         sync_fn = engine.push if direction == "push" else engine.pull
         status_fn = engine.status_push if direction == "push" else engine.status_pull
+        worker = get_current_worker()
 
         self.ui(log.write_line, f"{direction.capitalize()}ing...")
 
         bar = self.query_one("#sync-bar", ProgressBar)
-        self._sync_cancelled.clear()
         self.ui(self._show_scan_overlay, direction, preview=False)
         completed = 0
         total = 0
@@ -513,7 +506,7 @@ class FileManagerScreen(S3Screen):
 
             def on_file(a: SyncAction) -> None:
                 nonlocal completed
-                if self._sync_cancelled.is_set():
+                if worker.is_cancelled:
                     raise _SyncCancelled
                 completed += 1
                 self.ui(log.write_line, f"  {arrow} {a.relative_path}")
@@ -544,12 +537,12 @@ class FileManagerScreen(S3Screen):
     # --- preview ---
 
     @on(Button.Pressed, "#preview-push-btn")
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="sync")
     def action_preview_push(self) -> None:
         self._run_preview("push")
 
     @on(Button.Pressed, "#preview-pull-btn")
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="sync")
     def action_preview_pull(self) -> None:
         self._run_preview("pull")
 
@@ -647,7 +640,7 @@ class FileManagerScreen(S3Screen):
             ),
         )
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="mutate")
     def _do_delete(self, confirmed: bool, bucket: str, key: str) -> None:
         if not confirmed:
             return
@@ -710,7 +703,7 @@ class FileManagerScreen(S3Screen):
             ),
         )
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="mutate")
     def _do_rename(
         self, bucket: str, old_key: str, new_value: str, *, full_path: bool
     ) -> None:
@@ -746,12 +739,12 @@ class FileManagerScreen(S3Screen):
     # --- push / pull all ---
 
     @on(Button.Pressed, "#push-btn")
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="sync")
     def action_push_all(self) -> None:
         self._run_sync("push")
 
     @on(Button.Pressed, "#pull-btn")
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="sync")
     def action_pull_all(self) -> None:
         self._run_sync("pull")
 

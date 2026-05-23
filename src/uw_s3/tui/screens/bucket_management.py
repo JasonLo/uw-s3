@@ -6,6 +6,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
 
@@ -80,6 +81,14 @@ class CreateBucketScreen(ModalScreen[tuple[str, str] | None]):
 
 class BucketManagementScreen(S3Screen):
     """Manage S3 buckets: list, create, delete, set permissions."""
+
+    class BucketNotEmpty(Message):
+        """Worker → main: bucket has objects; ask user before force-deleting."""
+
+        def __init__(self, bucket_name: str, row_key: "RowKey") -> None:
+            super().__init__()
+            self.bucket_name = bucket_name
+            self.row_key = row_key
 
     BINDINGS = [
         Binding("escape", "pop_screen", "Back"),
@@ -179,19 +188,22 @@ class BucketManagementScreen(S3Screen):
             self.ui(table.remove_row, row_key)
         except S3Error as exc:
             if exc.code == "BucketNotEmpty":
-                self._confirm_force_delete(bucket_name, row_key)
+                self.post_message(self.BucketNotEmpty(bucket_name, row_key))
             else:
                 self.ui(status.update, f"Error: {exc}")
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
 
-    def _confirm_force_delete(self, bucket_name: str, row_key: RowKey) -> None:
+    @on(BucketNotEmpty)
+    def _on_bucket_not_empty(self, message: BucketNotEmpty) -> None:
+        bucket_name = message.bucket_name
+        row_key = message.row_key
+
         def on_confirm(confirmed: bool) -> None:
             if confirmed:
                 self._force_delete(bucket_name, row_key)
 
-        self.ui(
-            self.app.push_screen,
+        self.app.push_screen(
             ConfirmScreen(
                 f"Bucket '{bucket_name}' is not empty.\n"
                 "Delete all objects and remove the bucket?"
