@@ -709,7 +709,7 @@ wheels = [
 
 [[package]]
 name = "uw-s3"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "fsspec", extra = ["fuse"] },
