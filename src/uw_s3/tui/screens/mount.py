@@ -19,7 +19,8 @@ from textual.widgets import (
 
 from rich.text import Text
 
-from uw_s3.mount_backend import Mount, find_backend
+from uw_s3 import mounts_config
+from uw_s3.mount_backend import Mount, WorkerMount, find_backend
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
 
 _DEFAULT_MOUNT_ROOT = Path("./s3")
@@ -145,11 +146,12 @@ class MountScreen(S3Screen):
         self._selected_active_mount = ""
         self.query_one("#unmount-active-btn", Button).disabled = True
         for bucket, rm in self.s3_app.active_mounts.items():
-            status = (
-                Text("mounted", style="green")
-                if rm.is_mounted
-                else Text("stopped", style="red")
-            )
+            if not rm.is_mounted:
+                status = Text("stopped", style="red")
+            elif isinstance(rm, WorkerMount):
+                status = Text("detached", style="cyan")
+            else:
+                status = Text("mounted", style="green")
             table.add_row(bucket, str(rm.mount_point), status, key=bucket)
 
     @on(DataTable.RowHighlighted, "#active-mounts")
@@ -175,6 +177,8 @@ class MountScreen(S3Screen):
         self.ui(log.write_line, f"Unmounting {bucket}...")
         try:
             rm.unmount()
+            if isinstance(rm, WorkerMount):
+                mounts_config.remove(bucket, str(rm.mount_point))
             del self.s3_app.active_mounts[bucket]
             self.ui(log.write_line, f"Unmounted {bucket}.")
             self.ui(self._refresh_active_mounts)
@@ -274,6 +278,8 @@ class MountScreen(S3Screen):
         self.ui(log.write_line, f"Unmounting {bucket}...")
         try:
             rm.unmount()
+            if isinstance(rm, WorkerMount):
+                mounts_config.remove(bucket, str(rm.mount_point))
             del self.s3_app.active_mounts[bucket]
             self.ui(log.write_line, f"Unmounted {bucket}.")
             self.ui(self._update_ui_mounted, False)

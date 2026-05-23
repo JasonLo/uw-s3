@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 uws3 = "uw_s3.cli:main"
+uws3-mount-worker = "uw_s3.mount_worker:main"
 
 [build-system]
 requires = ["uv_build>=0.11.8,<0.12.0"]

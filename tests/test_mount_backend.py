@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from uw_s3.mount_backend import Mount, find_backend
+from uw_s3.mount_backend import Mount, clear_stale_mount, find_backend
 
 
 def _make_mount(**overrides: object) -> Mount:
@@ -185,7 +185,7 @@ def test_unmount_noop_when_thread_is_none(tmp_path) -> None:
 
 
 def test_clear_stale_mount_runs_fusermount_on_enotconn(tmp_path) -> None:
-    rm = _make_mount(mount_point=str(tmp_path / "mnt"))
+    mount_point = tmp_path / "mnt"
 
     def listdir_raises(_path):  # noqa: ANN001
         raise OSError(errno.ENOTCONN, "Transport endpoint is not connected")
@@ -193,25 +193,25 @@ def test_clear_stale_mount_runs_fusermount_on_enotconn(tmp_path) -> None:
     with patch("uw_s3.mount_backend.os.listdir", side_effect=listdir_raises):
         with patch("uw_s3.mount_backend.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            assert rm._clear_stale_mount() is True
+            assert clear_stale_mount(mount_point) is True
             first_call_args = mock_run.call_args_list[0].args[0]
-            assert first_call_args == ["fusermount", "-u", str(rm.mount_point)]
+            assert first_call_args[:2] == ["fusermount", "-u"]
 
 
 def test_clear_stale_mount_skips_on_healthy_dir(tmp_path) -> None:
-    rm = _make_mount(mount_point=str(tmp_path / "mnt"))
-    rm.mount_point.mkdir(parents=True, exist_ok=True)
+    mount_point = tmp_path / "mnt"
+    mount_point.mkdir(parents=True, exist_ok=True)
     with patch("uw_s3.mount_backend.subprocess.run") as mock_run:
-        assert rm._clear_stale_mount() is False
+        assert clear_stale_mount(mount_point) is False
         mock_run.assert_not_called()
 
 
 def test_clear_stale_mount_skips_on_unrelated_oserror(tmp_path) -> None:
-    rm = _make_mount(mount_point=str(tmp_path / "mnt"))
+    mount_point = tmp_path / "mnt"
     with patch(
         "uw_s3.mount_backend.os.listdir",
         side_effect=PermissionError("no permission"),
     ):
         with patch("uw_s3.mount_backend.subprocess.run") as mock_run:
-            assert rm._clear_stale_mount() is False
+            assert clear_stale_mount(mount_point) is False
             mock_run.assert_not_called()

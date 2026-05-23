@@ -75,16 +75,18 @@ class MainMenuScreen(S3Screen):
         )
         yield Footer()
 
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        actions = {
-            "file_manager": self.action_file_manager,
-            "bucket_management": self.action_bucket_management,
-            "mount": self.action_mount_bucket,
-            "quit": self.action_quit,
-        }
-        action = actions.get(event.option.id or "")
-        if action:
-            action()
+    async def on_option_list_option_selected(
+        self, event: OptionList.OptionSelected
+    ) -> None:
+        option_id = event.option.id or ""
+        if option_id == "file_manager":
+            self.action_file_manager()
+        elif option_id == "bucket_management":
+            self.action_bucket_management()
+        elif option_id == "mount":
+            self.action_mount_bucket()
+        elif option_id == "quit":
+            await self.action_quit()
 
     def on_mount(self) -> None:
         self._update_endpoint_bar()
@@ -104,8 +106,8 @@ class MainMenuScreen(S3Screen):
     def action_bucket_management(self) -> None:
         self._push_unique(BucketManagementScreen())
 
-    def action_quit(self) -> None:
-        self.app.exit()
+    async def action_quit(self) -> None:
+        await self.app.action_quit()
 
     def action_cursor_up(self) -> None:
         self.query_one("#menu", OptionList).action_cursor_up()
