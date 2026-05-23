@@ -180,6 +180,7 @@ class MountScreen(S3Screen):
             del self.s3_app.active_mounts[bucket]
             self.ui(log.write_line, f"Unmounted {bucket}.")
             self.ui(self._refresh_active_mounts)
+            self.ui(self.query_one("#tree", DirectoryTree).reload)
         except Exception as exc:
             self.ui(log.write_line, f"Unmount failed: {exc}")
 
@@ -239,8 +240,15 @@ class MountScreen(S3Screen):
             rm.mount()
             self.s3_app.active_mounts[bucket] = rm
             self.ui(log.write_line, f"Mounted {bucket} at {resolved}")
+            try:
+                sample = sorted(p.name for p in resolved.iterdir())[:5]
+                preview = ", ".join(sample) if sample else "(empty)"
+                self.ui(log.write_line, f"Contents: {preview}")
+            except OSError as exc:
+                self.ui(log.write_line, f"Could not list mount point: {exc}")
             self.ui(self._update_ui_mounted, True)
             self.ui(self._refresh_active_mounts)
+            self.ui(self.query_one("#tree", DirectoryTree).reload)
         except Exception as exc:
             self.ui(log.write_line, f"Mount failed: {exc}")
 
@@ -267,6 +275,7 @@ class MountScreen(S3Screen):
             self.ui(log.write_line, f"Unmounted {bucket}.")
             self.ui(self._update_ui_mounted, False)
             self.ui(self._refresh_active_mounts)
+            self.ui(self.query_one("#tree", DirectoryTree).reload)
         except Exception as exc:
             self.ui(log.write_line, f"Unmount failed: {exc}")
 
