@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the MinIO Python client in a Textual TUI that lets users sync folders to/from S3 buckets and mount buckets as local directories via rclone FUSE.
+uw-s3 is a terminal UI for UW-Madison Research Object Storage (S3). It wraps the MinIO Python client in a Textual TUI that lets users sync folders to/from S3 buckets and mount buckets as local directories via FUSE (in-process Python `s3fs` over `fsspec.fuse`).
 
 ## Code Preferences
 
@@ -41,7 +41,7 @@ src/uw_s3/
 ├── client.py            # UWS3 class — wraps MinIO client with convenience methods
 ├── cli.py               # Entry point: loads .env, checks for updates, restores saved endpoint, creates UWS3App, calls app.run()
 ├── updater.py           # Auto-update — compares installed version against latest GitHub tag
-├── rclone.py            # RcloneMount — spawns rclone in its own process group, passes creds via env
+├── mount_backend.py     # Mount — runs fsspec.fuse + s3fs in a daemon thread; no external helper
 ├── preferences.py       # JSON persistence in ~/.config/uw-s3/preferences.json (endpoint, last_bucket)
 ├── validators.py        # Shared validation helpers (bucket name regex)
 ├── sync/
@@ -57,7 +57,7 @@ src/uw_s3/
         ├── file_manager.py      # Unified file manager — browse, upload/download, sync
         ├── confirm.py           # Reusable confirmation dialog
         ├── input_dialog.py      # Generic single-field modal input prompt
-        └── mount.py             # rclone mount controls
+        └── mount.py             # FUSE mount controls (Python s3fs backend)
 ```
 
 **Data flow:** `cli.py` → `UWS3App` (holds credentials + `UWS3` client) → screens access `app.s3` for all S3 operations. User preferences (endpoint, last bucket) are persisted via `preferences.py` and restored on the next launch.
@@ -69,8 +69,8 @@ src/uw_s3/
 - **Screen navigation:** `push_screen()` / `pop_screen()` with `Binding("escape", "pop_screen", "Back")` on sub-screens.
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.
 - **Sync comparison:** Size-based only (not content hashes). `SyncEngine.status_push/pull()` for dry-run, `.push()/.pull()` for execution.
-- **Mount cleanup:** `UWS3App.on_unmount()` terminates each rclone process group (SIGTERM → SIGKILL fallback) on exit. Credentials are passed via `RCLONE_CONFIG_UWS3_*` env vars, never written to disk.
-- **rclone is external:** Not a Python dependency — must be on PATH. The mount screen checks `shutil.which("rclone")` and disables mount if missing.
+- **Mount cleanup:** `UWS3App.on_unmount()` calls `Mount.unmount()` for each entry in `active_mounts` (runs `fusermount -u` and joins the FUSE handler thread). Credentials are passed to `s3fs.S3FileSystem(key=..., secret=..., client_kwargs=...)` — never written to disk.
+- **Mount backend is in-process:** Python `s3fs` runs the FUSE handler inside a daemon thread in the python process — no separate helper binary, no orphan-process failure mode. If `s3fs`/`fsspec.fuse` aren't importable, the mount screen disables its Mount button. See `experiments/s3fs_eval/results.md` for the prototype comparison vs rclone and s3fs-fuse.
 
 <!-- lite-spec:pointer-block:start -->
 

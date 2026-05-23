@@ -5,8 +5,8 @@ import asyncio
 from textual.app import App
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
+from uw_s3.mount_backend import Mount
 from uw_s3.preferences import load_preferences, update_preference
-from uw_s3.rclone import RcloneMount
 from uw_s3.tui.screens.main_menu import MainMenuScreen
 
 
@@ -27,7 +27,7 @@ class UWS3App(App):
         self.access_key = access_key
         self.secret_key = secret_key
         self.s3 = UWS3(access_key, secret_key, endpoint=endpoint)
-        self.active_mounts: dict[str, RcloneMount] = {}
+        self.active_mounts: dict[str, Mount] = {}
         prefs = load_preferences()
         self.last_bucket: str = prefs.get("last_bucket", "")
 
@@ -53,7 +53,7 @@ class UWS3App(App):
         self.push_screen(MainMenuScreen())
 
     def cleanup_mounts(self) -> None:
-        """Terminate all rclone subprocesses and remove temp configs."""
+        """Unmount every active FUSE mount and release its handler thread."""
         for rm in self.active_mounts.values():
             try:
                 rm.unmount()

@@ -1,4 +1,4 @@
-"""Mount screen — mount an S3 bucket as a local folder via rclone."""
+"""Mount screen — mount an S3 bucket as a local folder via FUSE (Python s3fs)."""
 
 from pathlib import Path
 
@@ -19,7 +19,7 @@ from textual.widgets import (
 
 from rich.text import Text
 
-from uw_s3.rclone import RcloneMount, find_rclone
+from uw_s3.mount_backend import Mount, find_backend
 from uw_s3.tui.screens.base import EndpointBar, S3Screen
 
 _DEFAULT_MOUNT_ROOT = Path("./s3")
@@ -36,7 +36,7 @@ def _ensure_mount_root() -> Path:
 
 
 class MountScreen(S3Screen):
-    """Mount an S3 bucket as a local directory using rclone."""
+    """Mount an S3 bucket as a local directory using Python s3fs over FUSE."""
 
     BINDINGS = [
         Binding("escape", "pop_screen", "Back"),
@@ -116,13 +116,11 @@ class MountScreen(S3Screen):
         am_table.cursor_type = "row"
         self._load_buckets()
         self._refresh_active_mounts()
-        if find_rclone() is None:
+        if find_backend() is None:
             log = self.query_one("#log", Log)
-            log.write_line(
-                "rclone is not installed. Install it from https://rclone.org/install/"
-            )
+            log.write_line("Python s3fs is not installed. Run `uv sync` to install it.")
             self.query_one("#mount-status", Label).update(
-                "[bold red]rclone not found[/]"
+                "[bold red]mount backend not available[/]"
             )
             self.query_one("#mount-btn", Button).disabled = True
 
@@ -230,7 +228,7 @@ class MountScreen(S3Screen):
         self.ui(log.write_line, f"Mounting {bucket} at {resolved}...")
 
         try:
-            rm = RcloneMount(
+            rm = Mount(
                 access_key=self.s3_app.access_key,
                 secret_key=self.s3_app.secret_key,
                 endpoint=self.s3_app.s3.endpoint,
@@ -239,9 +237,12 @@ class MountScreen(S3Screen):
             )
             rm.mount()
             self.s3_app.active_mounts[bucket] = rm
+            if rm.cleared_stale:
+                self.ui(
+                    log.write_line,
+                    f"Cleared stale mount at {resolved} from a prior session.",
+                )
             self.ui(log.write_line, f"Mounted {bucket} at {resolved}")
-            if rm.log_path is not None:
-                self.ui(log.write_line, f"rclone log: {rm.log_path}")
             try:
                 sample = sorted(p.name for p in resolved.iterdir())[:5]
                 preview = ", ".join(sample) if sample else "(empty)"

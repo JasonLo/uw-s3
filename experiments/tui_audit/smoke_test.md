@@ -30,9 +30,9 @@ Launch with `uv run uws3`. Open the Textual dev console in a second terminal (`u
 - [x] Execute pull — local files written; progress callback updates UI continuously.
 
 ## Mount
-- [ ] Mount a bucket — `rclone` process starts; mount point lists files.
-- [ ] Unmount — process group terminated; mount point empty.
-- [ ] Quit app while mounted — `on_unmount` cleanup runs; `pgrep rclone` returns no orphan.
+- [ ] Mount a bucket — Python `s3fs` FUSE handler thread starts; mount point lists top-level files within 3 s.
+- [ ] Unmount — `fusermount -u` completes within 5 s; FUSE handler thread exits; mount point listing is empty / file manager `DirectoryTree` reloads.
+- [ ] Quit app while mounted — `UWS3App.on_unmount()` cleanup runs without blocking the event loop; `pgrep -x s3fs` and `pgrep -x rclone` both return empty.
 
 ## Responsiveness
 - [x] During any long-running worker (sync, large list), Escape and Tab keys respond and the footer updates within one render frame.

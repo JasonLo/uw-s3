@@ -63,7 +63,7 @@ class MainMenuScreen(S3Screen):
                 _option(
                     "3",
                     "Mount Bucket",
-                    "Mount an S3 bucket as a local directory via rclone",
+                    "Mount an S3 bucket as a local directory via FUSE",
                 ),
                 id="mount",
             ),
