@@ -34,4 +34,4 @@ This is a lean constitution for a small, rapid-prototyping Python project. It lo
 ## Amendments
 
 - **2026-05-22** — Initial constitution ratified.
-- **2026-05-22** — §8 generalized from rclone-specific to backend-agnostic. The durable safety invariants (no blocking the Textual event loop, no S3 credentials on disk) are kept; the choice between external-binary and in-process Python mount helpers is now data-driven per `specs/2_INTENT.md`. Reason: rclone is being replaced with one of two `s3fs` flavors, and the old §8 blocked both the rclone removal and the in-process candidate before evaluation could happen.
+- **2026-05-22** — §8 generalized from rclone-specific to backend-agnostic. The durable safety invariants (no blocking the Textual event loop, no S3 credentials on disk) are kept; the choice between external-binary and in-process Python mount helpers is now data-driven per `specs/2_INTENT/IT-2-s3fs-migration/intent.md`. Reason: rclone is being replaced with one of two `s3fs` flavors, and the old §8 blocked both the rclone removal and the in-process candidate before evaluation could happen.

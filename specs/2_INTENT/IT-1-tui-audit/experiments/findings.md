@@ -6,7 +6,7 @@ Audit of `src/uw_s3/tui/` against the official Textual documentation at https://
 - **Auditor:** Claude (Opus 4.7) for clo36@wisc.edu
 - **Method:** Targeted reference pass against the 8 doc pages that match patterns in this codebase (Workers, Screens, App, Widgets, CSS, Events, Testing, Devtools), then file-by-file walkthrough of `app.py`, `screens/base.py`, `screens/main_menu.py`, `screens/file_manager.py`, `screens/bucket_management.py`, `screens/mount.py`, `screens/confirm.py`, `screens/input_dialog.py`, and `tests/test_tui.py`.
 
-Severity definitions (from `specs/2_INTENT.md`):
+Severity definitions (from the IT-1 intent doc, `../intent.md`):
 - `blocker` — correctness/safety bug that must be fixed before merge.
 - `major` — clear deviation from prescriptive docs guidance with user-visible impact.
 - `minor` — best-practice nit or maintainability improvement.
@@ -20,7 +20,7 @@ Severity definitions (from `specs/2_INTENT.md`):
 | minor    | 8       | 0 (6 fixed, 2 accepted via 3_DECISIONS) |
 | **Total**| **11**  | **0 open**        |
 
-**Status:** Outcomes 1–3 of `specs/2_INTENT.md` satisfied as of 2026-05-22. Outcome 4 (smoke test on both endpoints) is pending the user-driven walkthrough of `experiments/tui_audit/smoke_test.md`.
+**Status:** Outcomes 1–3 of the IT-1 intent (`../intent.md`) satisfied as of 2026-05-22. Outcome 4 (smoke test on both endpoints) is pending the user-driven walkthrough of `./smoke_test.md`.
 
 ---
 
@@ -145,4 +145,4 @@ Verification at remediation time:
 
 ## Next step
 
-Human walkthrough of `experiments/tui_audit/smoke_test.md` on both endpoints (`campus`, `web`) — that's the only step left for Outcome 4. Once signed off, append a closing change-log line to `specs/2_INTENT.md` via `/ls-intent`.
+Human walkthrough of `./smoke_test.md` on both endpoints (`campus`, `web`) — that's the only step left for Outcome 4. Once signed off, append a closing change-log line to `../intent.md` via `/ls-intent`.

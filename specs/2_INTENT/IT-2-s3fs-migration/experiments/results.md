@@ -188,7 +188,7 @@ choice; nothing in the constitution blocks it.
 2. Defensive startup `fusermount -uz` of the configured mountpoint
    in the new `Mount` class, to absorb the brief stale window from
    a prior crashed session.
-3. Smoke-test the Mount section of `experiments/tui_audit/smoke_test.md`
+3. Smoke-test the Mount section of `../../IT-1-tui-audit/experiments/smoke_test.md`
    end-to-end on both endpoints once the new backend is wired in.
 
 **Next action:** log **D-0003** via `/ls-decisions` quoting this

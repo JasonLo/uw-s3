@@ -1,7 +1,8 @@
 # s3fs Backend Evaluation
 
-This folder backs the decision called for in `specs/2_INTENT.md`: which
-`s3fs` flavor replaces rclone as the mount backend.
+This folder backs the decision called for in the IT-2 intent
+(`../intent.md`): which `s3fs` flavor replaces rclone as the mount
+backend.
 
 Two candidates, prototyped side-by-side:
 
@@ -12,7 +13,7 @@ Two candidates, prototyped side-by-side:
 
 ## Prerequisites
 
-- A UW-S3 bucket you can list (use the same one used in `experiments/tui_audit/smoke_test.md`).
+- A UW-S3 bucket you can list (use the same one used in `../../IT-1-tui-audit/experiments/smoke_test.md`).
 - `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` in your shell environment (do not write them to disk — Constitution §9).
 - For `try_s3fs_fuse.sh`: the `s3fs` binary on `PATH`. Install with `sudo apt install s3fs` (Debian/Ubuntu), `brew install s3fs` (macOS), or build from https://github.com/s3fs-fuse/s3fs-fuse.
 - For `try_s3fs_python.py`: install the deps into the project venv: `uv pip install s3fs 'fsspec[fuse]' fusepy`. These will NOT be added to `pyproject.toml` until/unless this backend wins.
@@ -59,4 +60,4 @@ pgrep -fa rclone   # should already be empty
 
 Fill `results.md` as you go. Both endpoints (`campus` and `web`) must
 be exercised for each backend before the decision in
-`specs/3_DECISIONS.md` can be written.
+`../../../3_DECISIONS.md` can be written.

@@ -104,7 +104,7 @@ class Mount:
         self.mount_point.mkdir(parents=True, exist_ok=True)
 
         # use_listings_cache=False makes external writes visible on the very
-        # next listing — see experiments/s3fs_eval/results.md for the data.
+        # next listing — see specs/2_INTENT/IT-2-s3fs-migration/experiments/results.md for the data.
         fs = s3fs.S3FileSystem(
             key=self.access_key,
             secret=self.secret_key,

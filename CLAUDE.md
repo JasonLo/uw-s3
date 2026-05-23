@@ -70,7 +70,7 @@ src/uw_s3/
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.
 - **Sync comparison:** Size-based only (not content hashes). `SyncEngine.status_push/pull()` for dry-run, `.push()/.pull()` for execution.
 - **Mount cleanup:** `UWS3App.on_unmount()` calls `Mount.unmount()` for each entry in `active_mounts` (runs `fusermount -u` and joins the FUSE handler thread). Credentials are passed to `s3fs.S3FileSystem(key=..., secret=..., client_kwargs=...)` — never written to disk.
-- **Mount backend is in-process:** Python `s3fs` runs the FUSE handler inside a daemon thread in the python process — no separate helper binary, no orphan-process failure mode. If `s3fs`/`fsspec.fuse` aren't importable, the mount screen disables its Mount button. See `experiments/s3fs_eval/results.md` for the prototype comparison that led to this choice.
+- **Mount backend is in-process:** Python `s3fs` runs the FUSE handler inside a daemon thread in the python process — no separate helper binary, no orphan-process failure mode. If `s3fs`/`fsspec.fuse` aren't importable, the mount screen disables its Mount button. See `specs/2_INTENT/IT-2-s3fs-migration/experiments/results.md` for the prototype comparison that led to this choice.
 
 <!-- lite-spec:pointer-block:start -->
 
@@ -79,14 +79,14 @@ src/uw_s3/
 Before generating output that touches design, architecture, scope, or behavior, load the spec files lazily — they override CLAUDE.md on conflict.
 
 - **`specs/1_CONSTITUTION.md`** — non-negotiable principles. Every change to principles MUST go through `ls-constitution`; never edit silently.
-- **`specs/2_INTENT.md`** — current intent. Outcomes use EARS (`WHEN <trigger> THE SYSTEM SHALL <response>`) as testable success criteria. Refine via `ls-intent`.
-- **`specs/3_DECISIONS.md`** — append-only architectural choices. Consult before re-litigating a settled question; supersede via `ls-decisions` rather than editing.
+- **`specs/2_INTENT/IT-N-<slug>/intent.md`** — one folder per intent, each with its own `experiments/` subfolder. Active intents are those with `status: draft` or `status: in_progress` in the YAML frontmatter; `status` is derived by `ls-check` and MUST NOT be hand-edited. Outcomes use EARS (`WHEN <trigger> THE SYSTEM SHALL <response>`) as testable success criteria. Refine via `ls-intent`.
+- **`specs/3_DECISIONS.md`** — append-only architectural choices, each tagged with the originating intent (`[intent: IT-N]`). Consult before re-litigating a settled question; supersede via `ls-decisions` rather than editing.
 
 ## Spec file ownership
 
 Two tiers:
 
-- **HUMAN-OWNED** — `specs/1_CONSTITUTION.md` (governance) and `specs/2_INTENT.md` (product/scope). AI agents MUST modify these only via `/ls-constitution` and `/ls-intent` respectively. Never with direct Edit/Write/sed, not even for a "trivial sync" like fixing a stale count.
+- **HUMAN-OWNED** — `specs/1_CONSTITUTION.md` (governance) and `specs/2_INTENT/*/intent.md` (product/scope). AI agents MUST modify these only via `/ls-constitution` and `/ls-intent` respectively. Never with direct Edit/Write/sed, not even for a "trivial sync" like fixing a stale count.
 - **AGENT-WRITABLE** — `specs/3_DECISIONS.md` (engineering log). AI agents MAY append or supersede entries directly, OR via `/ls-decisions` for the guided path. Direct writes MUST follow the format in `ls-decisions`, validate against the constitution first, and only record decisions settled with the human in the current conversation (no phantom commitments).
 
 Files outside `specs/` (README, this file, source, `SKILL.md` bodies, scripts) are fair game for normal edits.
@@ -97,7 +97,7 @@ This repo uses **lite-spec** — invoke the skills by name:
 
 - `/ls-init` — bootstrap or repair the lite-spec setup
 - `/ls-constitution` — ratify or amend principles (`specs/1_CONSTITUTION.md`)
-- `/ls-intent` — draft or refine intent (`specs/2_INTENT.md`)
+- `/ls-intent` — draft or refine intent (`specs/2_INTENT/IT-N-<slug>/intent.md`)
 - `/ls-decisions` — log a decision (`specs/3_DECISIONS.md`)
 - `/ls-check` — drift report against intent + constitution
 
