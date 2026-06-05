@@ -12,7 +12,6 @@ from minio.error import S3Error
 
 from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
 from uw_s3.backup_ops import BackupResult, parse_s3_uri, run_backup, run_restore
-from uw_s3.preferences import load_preferences
 from uw_s3.tui.app import UWS3App
 from uw_s3.updater import check_and_update
 
@@ -22,9 +21,6 @@ CONFIG_DIR = Path.home() / ".config" / "uw-s3"
 def _resolve_endpoint(override: str | None = None) -> str:
     if override:
         return WEB_ENDPOINT if override.lower() == "web" else CAMPUS_ENDPOINT
-    saved = load_preferences().get("endpoint")
-    if saved in (CAMPUS_ENDPOINT, WEB_ENDPOINT):
-        return saved
     env = os.getenv("S3_ENDPOINT", "campus").lower()
     return WEB_ENDPOINT if env == "web" else CAMPUS_ENDPOINT
 
@@ -138,11 +134,7 @@ def _run_command(args: argparse.Namespace) -> int:
 def _run_tui() -> None:
     access_key, secret_key = _load_credentials()
     check_and_update()
-    app = UWS3App(
-        access_key=access_key,
-        secret_key=secret_key,
-        endpoint=_resolve_endpoint(),
-    )
+    app = UWS3App(access_key=access_key, secret_key=secret_key)
     app.run()
 
 

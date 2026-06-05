@@ -2,14 +2,30 @@
 
 import asyncio
 
+from textual import work
 from textual.app import App
 
-from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT, UWS3
+from uw_s3 import CAMPUS_ENDPOINT, WEB_ENDPOINT
 from uw_s3 import mounts_config
 from uw_s3.mount_backend import Mount, WorkerMount, clear_stale_mount
 from uw_s3.preferences import load_preferences, update_preference
+from uw_s3.s3_router import S3Router
+from uw_s3.tui.screens.base import S3Screen
 from uw_s3.tui.screens.main_menu import MainMenuScreen
 from uw_s3.tui.screens.survival_prompt import SurvivalPromptScreen
+
+
+def _network_subtitle(reachable: set[str]) -> str:
+    """Short network summary for the header subtitle."""
+    has_campus = CAMPUS_ENDPOINT in reachable
+    has_web = WEB_ENDPOINT in reachable
+    if has_campus and has_web:
+        return "Network: Campus + Web"
+    if has_web:
+        return "Network: Web only"
+    if has_campus:
+        return "Network: Campus only"
+    return "Network: offline"
 
 
 class UWS3App(App):
@@ -23,27 +39,15 @@ class UWS3App(App):
         *,
         access_key: str,
         secret_key: str,
-        endpoint: str = CAMPUS_ENDPOINT,
     ) -> None:
         super().__init__()
         self.access_key = access_key
         self.secret_key = secret_key
-        self.s3 = UWS3(access_key, secret_key, endpoint=endpoint)
+        self.s3 = S3Router(access_key, secret_key)
         self.active_mounts: dict[str, Mount | WorkerMount] = {}
         self._quitting: bool = False
         prefs = load_preferences()
         self.last_bucket: str = prefs.get("last_bucket", "")
-
-    @property
-    def endpoint_label(self) -> str:
-        return "Campus" if self.s3.endpoint == CAMPUS_ENDPOINT else "Web"
-
-    def switch_endpoint(self) -> None:
-        """Toggle between Campus and Web endpoints."""
-        new = WEB_ENDPOINT if self.s3.endpoint == CAMPUS_ENDPOINT else CAMPUS_ENDPOINT
-        self.s3 = UWS3(self.access_key, self.secret_key, endpoint=new)
-        self.sub_title = f"Endpoint: {self.endpoint_label}"
-        update_preference("endpoint", new)
 
     def save_last_bucket(self, bucket: str) -> None:
         """Persist the last-selected bucket."""
@@ -52,9 +56,29 @@ class UWS3App(App):
 
     def on_mount(self) -> None:
         self.theme = "atom-one-dark"
-        self.sub_title = f"Endpoint: {self.endpoint_label}"
+        self.sub_title = "Detecting network…"
         self.restore_active_mounts()
         self.push_screen(MainMenuScreen())
+        self.start_probe()
+
+    @work(exclusive=True, group="probe")
+    async def start_probe(self) -> None:
+        """Probe endpoint reachability, then refresh the UI.
+
+        The blocking probe (socket connects + list_buckets) runs in a thread via
+        `asyncio.to_thread` so the event loop stays free (Constitution §4); the
+        UI update then runs back on the loop. Using an async worker (rather than
+        a thread worker + `call_from_thread`) avoids a teardown deadlock if the
+        app exits mid-probe.
+        """
+        await asyncio.to_thread(self.s3.probe)
+        self._on_probe_done()
+
+    def _on_probe_done(self) -> None:
+        self.sub_title = _network_subtitle(self.s3.reachable_endpoints)
+        screen = self.screen
+        if isinstance(screen, S3Screen):
+            screen.refresh_for_probe()
 
     def restore_active_mounts(self) -> None:
         """Re-attach to any surviving worker processes from prior sessions."""

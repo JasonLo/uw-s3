@@ -29,8 +29,12 @@ Then create `~/.config/uw-s3/.env` with your credentials:
 ```
 S3_ACCESS_KEY_ID=your_key
 S3_SECRET_ACCESS_KEY=your_secret
-S3_ENDPOINT=campus  # "campus" (UW network/VPN, default) or "web" (any network)
 ```
+
+You no longer pick an endpoint. UW buckets live on one of two domains —
+`campus.s3.wisc.edu` (UW network/VPN only) or `web.s3.wisc.edu` (public) — and
+the app detects which domains it can reach, probes both for your buckets, and
+remembers which bucket lives where so every operation routes automatically.
 
 Mounting requires FUSE on the host (`fuse3` on Linux/WSL2, macFUSE on macOS). The `s3fs` and `fsspec[fuse]` Python deps install via `uv sync`.
 
@@ -42,7 +46,10 @@ The main menu provides three modes:
 - **Manage Files** — browse buckets, upload/download individual files, and bulk-sync folders
 - **Mount Bucket** — mount a bucket as a local directory via FUSE (Python `s3fs`)
 
-The endpoint (campus vs web) can be toggled at runtime from the main menu.
+A status bar shows which domains are reachable. Buckets on an unreachable domain
+(e.g. campus buckets while you're off-VPN) are listed greyed-out with a hint;
+connect to the UW network and hit **Refresh** to use them. The only place you
+choose a domain is when **creating** a bucket, where it's an inherent choice.
 
 ## Development
 

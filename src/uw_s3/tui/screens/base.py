@@ -4,42 +4,49 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rich.text import Text
 
-from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
 from textual.worker import NoActiveWorker, get_current_worker
 
+from uw_s3.client import CAMPUS_ENDPOINT, WEB_ENDPOINT
+
 if TYPE_CHECKING:
     from uw_s3.tui.app import UWS3App
 
 
-class EndpointBar(Static, can_focus=True):
-    """Displays the current S3 endpoint — click or press e to switch."""
+def network_status_text(reachable: set[str]) -> str:
+    """Render the passive network status line from the reachable-endpoint set."""
+    has_campus = CAMPUS_ENDPOINT in reachable
+    has_web = WEB_ENDPOINT in reachable
+    if has_campus and has_web:
+        return "  [bold]Network:[/] Campus + Web [dim]— all buckets reachable[/]"
+    if has_web:
+        return (
+            "  [bold]Network:[/] Web only "
+            "[dim]— campus buckets need the UW network or VPN[/]"
+        )
+    if has_campus:
+        return "  [bold]Network:[/] Campus only [dim]— on the UW network[/]"
+    return "  [bold]Network:[/] [red]offline[/] [dim]— no endpoints reachable[/]"
+
+
+class NetworkBar(Static):
+    """Passive banner showing which S3 endpoints are reachable right now."""
 
     DEFAULT_CSS = """
-    EndpointBar {
+    NetworkBar {
         height: auto;
         padding: 0 2;
         margin: 0 2;
         background: $boost;
         border: round $primary;
     }
-    EndpointBar:hover {
-        background: $primary 20%;
-    }
     """
-
-    def on_click(self) -> None:
-        cast("S3Screen", self.screen).action_switch_endpoint()
 
 
 class S3Screen(Screen):
     """Screen with typed access to UWS3App and a threading shorthand."""
-
-    BINDINGS = [
-        Binding("e", "switch_endpoint", "Switch Endpoint"),
-    ]
 
     @property
     def s3_app(self) -> UWS3App:
@@ -61,27 +68,19 @@ class S3Screen(Screen):
         self.workers.cancel_all()
         self.app.pop_screen()
 
-    def _update_endpoint_bar(self) -> None:
+    def _update_network_bar(self) -> None:
         try:
-            bar = self.query_one(EndpointBar)
+            bar = self.query_one(NetworkBar)
         except NoMatches:
             return
-        ep = self.s3_app.endpoint_label
-        hint = (
-            "requires UW network or VPN" if ep == "Campus" else "works from any network"
-        )
         bar.update(
-            Text.from_markup(
-                f"  [bold]Endpoint:[/] {ep} [dim]({hint})[/]"
-                f"   [dim]— buckets are tied to their creation endpoint[/]"
-            )
+            Text.from_markup(network_status_text(self.s3_app.s3.reachable_endpoints))
         )
 
-    def action_switch_endpoint(self) -> None:
-        self.s3_app.switch_endpoint()
-        self._update_endpoint_bar()
-        self.notify(f"Switched to {self.s3_app.endpoint_label}")
-        self.on_endpoint_switched()
+    def reload_buckets(self) -> None:
+        """Override to reload bucket-derived data after a probe refresh."""
 
-    def on_endpoint_switched(self) -> None:
-        """Override to reload data after an endpoint switch."""
+    def refresh_for_probe(self) -> None:
+        """Called after a background probe completes; refresh bar + data."""
+        self._update_network_bar()
+        self.reload_buckets()

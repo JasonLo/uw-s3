@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING
 
+from rich.text import Text
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -12,8 +14,10 @@ from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Sel
 
 from minio.error import S3Error
 
+from uw_s3.client import CAMPUS_ENDPOINT, WEB_ENDPOINT
+from uw_s3.s3_router import EndpointUnreachable
 from uw_s3.validators import BUCKET_NAME_RE
-from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.base import NetworkBar, S3Screen
 from uw_s3.tui.screens.confirm import ConfirmScreen
 
 if TYPE_CHECKING:
@@ -25,14 +29,24 @@ PERMISSION_OPTIONS: list[tuple[str, str]] = [
     ("Public Read/Write (not recommended)", "public-readwrite"),
 ]
 
+_DOMAIN_LABELS: dict[str, str] = {
+    CAMPUS_ENDPOINT: "Campus (UW network / VPN only)",
+    WEB_ENDPOINT: "Web (public internet)",
+}
 
-class CreateBucketScreen(ModalScreen[tuple[str, str] | None]):
-    """Modal dialog for creating a new bucket."""
+
+def _domain_name(endpoint: str) -> str:
+    """Short domain label for the bucket list."""
+    return "campus" if endpoint == CAMPUS_ENDPOINT else "web"
+
+
+class CreateBucketScreen(ModalScreen[tuple[str, str, str] | None]):
+    """Modal dialog for creating a new bucket on a chosen endpoint."""
 
     CSS = """
     CreateBucketScreen { align: center middle; }
     #create-dialog {
-        width: 60;
+        width: 64;
         height: auto;
         padding: 2 4;
         border: round $accent;
@@ -48,11 +62,26 @@ class CreateBucketScreen(ModalScreen[tuple[str, str] | None]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
+    def __init__(self, reachable: set[str]) -> None:
+        super().__init__()
+        # Only endpoints we can reach can host a new bucket. Prefer web as the
+        # default (it works from anywhere); fall back to campus.
+        ordered = [e for e in (WEB_ENDPOINT, CAMPUS_ENDPOINT) if e in reachable]
+        self._domain_options = [(_DOMAIN_LABELS[e], e) for e in ordered]
+        self._default_domain = ordered[0] if ordered else WEB_ENDPOINT
+
     def compose(self) -> ComposeResult:
         with Vertical(id="create-dialog"):
             yield Label("Create New Bucket", id="create-title")
             yield Label("Bucket Name")
             yield Input(placeholder="e.g. netid-bucket-01", id="bucket_name")
+            yield Label("Domain")
+            yield Select(
+                self._domain_options,
+                value=self._default_domain,
+                id="domain",
+                allow_blank=False,
+            )
             yield Label("Permission")
             yield Select(
                 PERMISSION_OPTIONS,
@@ -72,7 +101,8 @@ class CreateBucketScreen(ModalScreen[tuple[str, str] | None]):
     def _submit(self) -> None:
         name = self.query_one("#bucket_name", Input).value.strip()
         permission = str(self.query_one("#permission", Select).value)
-        self.dismiss((name, permission))
+        endpoint = str(self.query_one("#domain", Select).value)
+        self.dismiss((name, permission, endpoint))
 
     @on(Button.Pressed, "#create-cancel")
     def action_cancel(self) -> None:
@@ -120,7 +150,7 @@ class BucketManagementScreen(S3Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield EndpointBar()
+        yield NetworkBar()
         yield DataTable(id="bucket-table")
         with Horizontal(id="action-row"):
             yield Button("New Bucket", variant="primary", id="create_btn")
@@ -130,13 +160,13 @@ class BucketManagementScreen(S3Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         table = self.query_one("#bucket-table", DataTable)
         table.cursor_type = "row"
-        table.add_columns("Bucket")
+        table.add_columns("Bucket", "Domain")
         self._load_buckets()
 
-    def on_endpoint_switched(self) -> None:
+    def reload_buckets(self) -> None:
         self._load_buckets()
 
     @work(thread=True, exclusive=True, group="load")
@@ -144,25 +174,36 @@ class BucketManagementScreen(S3Screen):
         status = self.query_one("#status", Label)
         self.ui(status.update, "Loading buckets...")
         try:
-            buckets = self.s3_app.s3.list_buckets()
+            entries = self.s3_app.s3.entries()
             table = self.query_one("#bucket-table", DataTable)
             self.ui(table.clear)
-            for name in sorted(buckets):
-                self.ui(table.add_row, name, key=name)
-            self.ui(status.update, f"{len(buckets)} bucket(s)")
+            for e in entries:
+                if e.reachable:
+                    name_cell: Text = Text(e.name)
+                    domain_cell = Text(_domain_name(e.endpoint))
+                else:
+                    name_cell = Text(e.name, style="dim")
+                    domain_cell = Text(
+                        f"{_domain_name(e.endpoint)} 🔒 VPN", style="dim"
+                    )
+                self.ui(table.add_row, name_cell, domain_cell, key=e.name)
+            self.ui(status.update, f"{len(entries)} bucket(s)")
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
 
     @on(Button.Pressed, "#create_btn")
     def _open_create_dialog(self) -> None:
-        def on_result(result: tuple[str, str] | None) -> None:
+        def on_result(result: tuple[str, str, str] | None) -> None:
             if result is not None:
                 self._create_bucket(*result)
 
-        self.app.push_screen(CreateBucketScreen(), on_result)
+        self.app.push_screen(
+            CreateBucketScreen(self.s3_app.s3.reachable_endpoints), on_result
+        )
 
     @on(Button.Pressed, "#refresh_btn")
     def action_refresh(self) -> None:
+        self.s3_app.start_probe()
         self._load_buckets()
 
     @on(Button.Pressed, "#delete_btn")
@@ -186,6 +227,8 @@ class BucketManagementScreen(S3Screen):
             self.s3_app.s3.delete_bucket(bucket_name)
             self.ui(status.update, f"Bucket '{bucket_name}' deleted.")
             self.ui(table.remove_row, row_key)
+        except EndpointUnreachable as exc:
+            self.ui(status.update, str(exc))
         except S3Error as exc:
             if exc.code == "BucketNotEmpty":
                 self.post_message(self.BucketNotEmpty(bucket_name, row_key))
@@ -222,11 +265,13 @@ class BucketManagementScreen(S3Screen):
             self.s3_app.s3.delete_bucket(bucket_name)
             self.ui(status.update, f"Bucket '{bucket_name}' and all objects deleted.")
             self.ui(table.remove_row, row_key)
+        except EndpointUnreachable as exc:
+            self.ui(status.update, str(exc))
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")
 
     @work(thread=True, exclusive=True, group="create")
-    def _create_bucket(self, name: str, permission: str) -> None:
+    def _create_bucket(self, name: str, permission: str, endpoint: str) -> None:
         status = self.query_one("#status", Label)
 
         if not name:
@@ -239,14 +284,18 @@ class BucketManagementScreen(S3Screen):
             )
             return
 
+        domain = _domain_name(endpoint)
         try:
-            if self.s3_app.s3.bucket_exists(name):
+            if self.s3_app.s3.bucket_exists(name, endpoint=endpoint):
                 self.ui(status.update, f"Bucket '{name}' already exists.")
                 return
-            self.s3_app.s3.create_bucket(name)
+            self.s3_app.s3.create_bucket(name, endpoint=endpoint)
             if permission != "private":
                 self.s3_app.s3.set_bucket_policy(name, str(permission))
-            self.ui(status.update, f"Bucket '{name}' created ({permission})!")
+            self.ui(
+                status.update,
+                f"Bucket '{name}' created on {domain} ({permission})!",
+            )
             self._load_buckets()
         except Exception as exc:
             self.ui(status.update, f"Error: {exc}")

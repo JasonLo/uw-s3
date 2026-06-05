@@ -8,7 +8,7 @@ from textual.binding import Binding
 from textual.widgets import Footer, Header, OptionList
 from textual.widgets.option_list import Option
 
-from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.base import NetworkBar, S3Screen
 from uw_s3.tui.screens.bucket_management import BucketManagementScreen
 from uw_s3.tui.screens.file_manager import FileManagerScreen
 from uw_s3.tui.screens.mount import MountScreen
@@ -41,7 +41,7 @@ class MainMenuScreen(S3Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield EndpointBar()
+        yield NetworkBar()
         yield OptionList(
             Option(
                 _option(
@@ -89,11 +89,11 @@ class MainMenuScreen(S3Screen):
             await self.action_quit()
 
     def on_mount(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         self.query_one("#menu", OptionList).focus()
 
     def on_screen_resume(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         self.query_one("#menu", OptionList).focus()
 
     def _push_unique(self, screen: S3Screen) -> None:

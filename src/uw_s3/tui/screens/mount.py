@@ -20,10 +20,16 @@ from textual.widgets import (
 from rich.text import Text
 
 from uw_s3 import mounts_config
+from uw_s3.client import CAMPUS_ENDPOINT
 from uw_s3.mount_backend import Mount, WorkerMount, find_backend
-from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.base import NetworkBar, S3Screen
 
 _DEFAULT_MOUNT_ROOT = Path("./s3")
+
+
+def _domain_name(endpoint: str) -> str:
+    """Short domain label for the bucket list."""
+    return "campus" if endpoint == CAMPUS_ENDPOINT else "web"
 
 
 def _ensure_mount_root() -> Path:
@@ -65,7 +71,7 @@ class MountScreen(S3Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield EndpointBar()
+        yield NetworkBar()
         with Vertical(id="active-mounts-panel") as amp:
             amp.border_title = "Active Mounts"
             yield DataTable(id="active-mounts")
@@ -102,13 +108,14 @@ class MountScreen(S3Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         default = _ensure_mount_root()
         self._selected_path = str(default)
         self.query_one("#mount-path", Input).value = str(default)
         self.query_one("#selected-dir", Label).update(f"Folder: [bold]{default}[/]")
         table = self.query_one("#bucket-table", DataTable)
         table.add_column("Bucket Name", key="name")
+        table.add_column("Domain", key="domain")
         table.cursor_type = "row"
         am_table = self.query_one("#active-mounts", DataTable)
         am_table.add_column("Bucket", key="bucket")
@@ -125,17 +132,25 @@ class MountScreen(S3Screen):
             )
             self.query_one("#mount-btn", Button).disabled = True
 
-    def on_endpoint_switched(self) -> None:
+    def reload_buckets(self) -> None:
         self._load_buckets()
 
     @work(thread=True, exclusive=True, group="load")
     def _load_buckets(self) -> None:
         table = self.query_one("#bucket-table", DataTable)
         try:
-            buckets = self.s3_app.s3.list_buckets()
+            entries = self.s3_app.s3.entries()
             self.ui(table.clear)
-            for b in buckets:
-                self.ui(table.add_row, b, key=b)
+            for e in entries:
+                if e.reachable:
+                    name_cell: Text = Text(e.name)
+                    domain_cell = Text(_domain_name(e.endpoint))
+                else:
+                    name_cell = Text(e.name, style="dim")
+                    domain_cell = Text(
+                        f"{_domain_name(e.endpoint)} 🔒 VPN", style="dim"
+                    )
+                self.ui(table.add_row, name_cell, domain_cell, key=e.name)
         except Exception as exc:
             log = self.query_one("#log", Log)
             self.ui(log.write_line, f"Error loading buckets: {exc}")
@@ -228,6 +243,15 @@ class MountScreen(S3Screen):
             self.ui(log.write_line, f"{bucket} is already mounted.")
             return
 
+        endpoint = self.s3_app.s3.endpoint_for(bucket)
+        if endpoint is None or not self.s3_app.s3.is_reachable(bucket):
+            self.ui(
+                log.write_line,
+                f"Cannot mount {bucket}: its endpoint is unreachable "
+                "— connect to the UW network or VPN and Refresh.",
+            )
+            return
+
         resolved = Path(mount_path).expanduser().resolve()
         self.ui(log.write_line, f"Mounting {bucket} at {resolved}...")
 
@@ -235,7 +259,7 @@ class MountScreen(S3Screen):
             rm = Mount(
                 access_key=self.s3_app.access_key,
                 secret_key=self.s3_app.secret_key,
-                endpoint=self.s3_app.s3.endpoint,
+                endpoint=endpoint,
                 bucket=bucket,
                 mount_point=mount_path,
             )

@@ -23,10 +23,11 @@ from textual.widgets import (
 )
 from textual.worker import get_current_worker
 
+from uw_s3.s3_router import EndpointUnreachable
 from uw_s3.sync.config import add_mapping
 from uw_s3.sync.engine import ProgressCallback, ScanPhase, SyncAction, SyncEngine
 from uw_s3.sync.models import SyncMap
-from uw_s3.tui.screens.base import EndpointBar, S3Screen
+from uw_s3.tui.screens.base import NetworkBar, S3Screen
 from uw_s3.tui.screens.confirm import ConfirmScreen
 from uw_s3.tui.screens.input_dialog import InputScreen
 
@@ -138,7 +139,7 @@ class FileManagerScreen(S3Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield EndpointBar()
+        yield NetworkBar()
         with Horizontal(id="bucket-bar"):
             sel = Select(
                 [], id="bucket-select", prompt="Loading buckets...", compact=True
@@ -182,16 +183,16 @@ class FileManagerScreen(S3Screen):
                         yield Button("Cancel", id="cancel-sync-btn", variant="error")
 
     def on_mount(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         table = self.query_one("#s3-table", DataTable)
         table.cursor_type = "row"
         self._load_buckets()
 
     def on_screen_resume(self) -> None:
-        self._update_endpoint_bar()
+        self._update_network_bar()
         self._load_buckets()
 
-    def on_endpoint_switched(self) -> None:
+    def reload_buckets(self) -> None:
         self._load_buckets()
 
     # --- data loading ---
@@ -199,8 +200,12 @@ class FileManagerScreen(S3Screen):
     @work(thread=True, exclusive=True, group="load")
     def _load_buckets(self) -> None:
         try:
-            buckets = self.s3_app.s3.list_buckets()
-            options: list[tuple[str, str]] = [(b, b) for b in buckets]
+            entries = self.s3_app.s3.entries()
+            buckets = {e.name for e in entries}
+            options: list[tuple[str, str]] = [
+                (e.name if e.reachable else f"🔒 {e.name} (VPN)", e.name)
+                for e in entries
+            ]
             sel = self.query_one("#bucket-select", Select)
             prev = self.ui(lambda: sel.value)
             self.ui(setattr, sel, "prompt", "Select a bucket")
@@ -343,13 +348,18 @@ class FileManagerScreen(S3Screen):
             self.ui(log.write_line, "Select a local directory first.")
             return None
         prefix = self.ui(lambda: self._current_prefix)
+        try:
+            client = self.s3_app.s3.client_for(bucket)
+        except EndpointUnreachable as exc:
+            self.ui(log.write_line, str(exc))
+            return None
         mapping = SyncMap(
             local_dir=str(local_dir),
             bucket=bucket,
             prefix=prefix,
-            endpoint=self.s3_app.s3.endpoint,
+            endpoint=self.s3_app.s3.endpoint_for(bucket) or "",
         )
-        return SyncEngine(self.s3_app.s3, mapping), log
+        return SyncEngine(client, mapping), log
 
     def _run_preview(self, direction: Literal["push", "pull"]) -> None:
         result = self._make_engine()

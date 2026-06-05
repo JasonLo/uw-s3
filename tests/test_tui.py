@@ -4,16 +4,24 @@ from unittest.mock import patch, MagicMock
 
 from textual.widgets import Footer, Header, OptionList
 
+from uw_s3.bucket_registry import CAMPUS_ENDPOINT, WEB_ENDPOINT, BucketRegistry
 from uw_s3.tui.app import UWS3App
-from uw_s3.tui.screens.base import EndpointBar
+from uw_s3.tui.screens.base import NetworkBar, network_status_text
 from uw_s3.tui.screens.confirm import ConfirmScreen
 from uw_s3.tui.screens.main_menu import MainMenuScreen
 
 
 def _make_app() -> UWS3App:
-    """Create a UWS3App with a mocked Minio client."""
+    """Create a UWS3App with a mocked Minio client and an offline router.
+
+    The router's probe is stubbed and its registry reset so tests never touch
+    the network or the on-disk bucket cache.
+    """
     with patch("uw_s3.client.Minio"):
-        return UWS3App(access_key="test", secret_key="test")
+        app = UWS3App(access_key="test", secret_key="test")
+    app.s3.registry = BucketRegistry()
+    app.s3.probe = lambda: None  # type: ignore[method-assign]
+    return app
 
 
 async def test_app_launches_main_menu() -> None:
@@ -27,7 +35,7 @@ async def test_main_menu_has_expected_widgets() -> None:
     async with app.run_test() as _pilot:
         app.screen.query_one(Header)
         app.screen.query_one(Footer)
-        app.screen.query_one(EndpointBar)
+        app.screen.query_one(NetworkBar)
         app.screen.query_one(OptionList)
 
 
@@ -46,22 +54,25 @@ async def test_quit_key() -> None:
         assert app.return_code is not None or not app.is_running
 
 
-async def test_endpoint_switch() -> None:
-    app = _make_app()
-    async with app.run_test() as pilot:
-        assert app.endpoint_label == "Campus"
-        await pilot.press("e")
-        assert app.endpoint_label == "Web"
-        await pilot.press("e")
-        assert app.endpoint_label == "Campus"
+def test_network_status_text() -> None:
+    assert "offline" in network_status_text(set())
+    assert "Campus + Web" in network_status_text({CAMPUS_ENDPOINT, WEB_ENDPOINT})
+    assert "Web only" in network_status_text({WEB_ENDPOINT})
 
 
-async def test_endpoint_label_updates_subtitle() -> None:
+async def test_network_bar_present() -> None:
+    app = _make_app()
+    async with app.run_test() as _pilot:
+        app.screen.query_one(NetworkBar)
+
+
+async def test_no_endpoint_switch_binding() -> None:
     app = _make_app()
     async with app.run_test() as pilot:
-        assert "Campus" in app.sub_title
+        # 'e' was the old endpoint-switch key; it must no longer change anything.
         await pilot.press("e")
-        assert "Web" in app.sub_title
+        await pilot.pause()
+        assert isinstance(app.screen, MainMenuScreen)
 
 
 async def test_navigate_to_bucket_management() -> None:
