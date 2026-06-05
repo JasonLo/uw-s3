@@ -1,5 +1,5 @@
 ---
-id: IT-1
+id: I-1
 title: Textual TUI audit
 slug: tui-audit
 status: complete
@@ -14,7 +14,7 @@ verdict_checked_at: null
 # Intent Doc: Textual TUI audit
 
 - **Author:** clo36@wisc.edu
-- **Note:** Reconstructed retroactively from `experiments/findings.md` during the IT-N folder migration. The original `2_INTENT.md` for this work was overwritten when the s3fs intent (IT-2) opened.
+- **Note:** Reconstructed retroactively from `experiments/findings.md` during the I-N folder migration. The original intent doc for this work was overwritten when the s3fs intent (I-2) opened.
 
 ## Problem
 
@@ -23,8 +23,8 @@ The Textual TUI in `src/uw_s3/tui/` had drifted from the official Textual docs i
 ## Outcome
 
 - **WHEN** the audit completes, **THE SYSTEM SHALL** have produced a written findings document classifying every deviation by severity (blocker / major / minor) with a Textual docs citation.
-- **WHEN** the audit ships, **THE SYSTEM SHALL** have zero open major findings — each must be fixed in `src/uw_s3/tui/` or formally accepted via `specs/3_DECISIONS.md`.
-- **WHEN** the audit ships, **THE SYSTEM SHALL** have every minor finding either fixed or accepted via `specs/3_DECISIONS.md`, with the disposition logged in a remediation table.
+- **WHEN** the audit ships, **THE SYSTEM SHALL** have zero open major findings — each must be fixed in `src/uw_s3/tui/` or formally accepted via `specs/DECISIONS.md`.
+- **WHEN** the audit ships, **THE SYSTEM SHALL** have every minor finding either fixed or accepted via `specs/DECISIONS.md`, with the disposition logged in a remediation table.
 - **WHEN** the audit ships, **THE SYSTEM SHALL** pass `uv run ruff check .`, `uv run ruff format --check .`, and `uv run pytest`, with the Mount flow verified against `experiments/smoke_test.md` on both `campus` and `web` endpoints.
 
 ## Non-Goals
@@ -40,4 +40,4 @@ The Textual TUI in `src/uw_s3/tui/` had drifted from the official Textual docs i
 
 ## Change Log
 
-- **2026-05-22** — Audit complete; 11 findings produced (3 major, 8 minor). All major fixed, 6 minor fixed, 2 minor accepted via `specs/3_DECISIONS.md` (D-0001, D-0002). Outcome 4 Mount-flow smoke-test sign-off deferred to IT-2 (s3fs migration), where it became the migration's gating verification.
+- **2026-05-22** — Audit complete; 11 findings produced (3 major, 8 minor). All major fixed, 6 minor fixed, 2 minor accepted via `specs/DECISIONS.md` (D-0001, D-0002). Outcome 4 Mount-flow smoke-test sign-off deferred to I-2 (s3fs migration), where it became the migration's gating verification.

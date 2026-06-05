@@ -1,4 +1,4 @@
-"""Tests for the detached mount worker CLI (IT-3 / Constitution §10)."""
+"""Tests for the detached mount worker CLI (I-3 / Constitution §10)."""
 
 from __future__ import annotations
 

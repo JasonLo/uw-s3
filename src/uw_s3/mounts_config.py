@@ -1,6 +1,6 @@
 """Persist detached-mount metadata to ~/.config/uw-s3/mounts.json.
 
-Stores only `{bucket, endpoint, mount_point, pid, started_at}` per IT-3 and
+Stores only `{bucket, endpoint, mount_point, pid, started_at}` per I-3 and
 Constitution §9: S3 credentials MUST NEVER be persisted here.
 """
 

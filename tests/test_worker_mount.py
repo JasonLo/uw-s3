@@ -1,4 +1,4 @@
-"""Tests for the WorkerMount detached-subprocess wrapper (IT-3)."""
+"""Tests for the WorkerMount detached-subprocess wrapper (I-3)."""
 
 from __future__ import annotations
 

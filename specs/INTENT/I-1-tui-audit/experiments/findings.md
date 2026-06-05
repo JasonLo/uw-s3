@@ -6,7 +6,7 @@ Audit of `src/uw_s3/tui/` against the official Textual documentation at https://
 - **Auditor:** Claude (Opus 4.7) for clo36@wisc.edu
 - **Method:** Targeted reference pass against the 8 doc pages that match patterns in this codebase (Workers, Screens, App, Widgets, CSS, Events, Testing, Devtools), then file-by-file walkthrough of `app.py`, `screens/base.py`, `screens/main_menu.py`, `screens/file_manager.py`, `screens/bucket_management.py`, `screens/mount.py`, `screens/confirm.py`, `screens/input_dialog.py`, and `tests/test_tui.py`.
 
-Severity definitions (from the IT-1 intent doc, `../intent.md`):
+Severity definitions (from the I-1 intent doc, `../intent.md`):
 - `blocker` — correctness/safety bug that must be fixed before merge.
 - `major` — clear deviation from prescriptive docs guidance with user-visible impact.
 - `minor` — best-practice nit or maintainability improvement.
@@ -17,10 +17,10 @@ Severity definitions (from the IT-1 intent doc, `../intent.md`):
 |----------|--------:|------------------:|
 | blocker  | 0       | 0                 |
 | major    | 3       | 0 (all fixed)     |
-| minor    | 8       | 0 (6 fixed, 2 accepted via 3_DECISIONS) |
+| minor    | 8       | 0 (6 fixed, 2 accepted via DECISIONS) |
 | **Total**| **11**  | **0 open**        |
 
-**Status:** Outcomes 1–3 of the IT-1 intent (`../intent.md`) satisfied as of 2026-05-22. Outcome 4 (smoke test on both endpoints) is pending the user-driven walkthrough of `./smoke_test.md`.
+**Status:** Outcomes 1–3 of the I-1 intent (`../intent.md`) satisfied as of 2026-05-22. Outcome 4 (smoke test on both endpoints) is pending the user-driven walkthrough of `./smoke_test.md`.
 
 ---
 
@@ -56,7 +56,7 @@ Severity definitions (from the IT-1 intent doc, `../intent.md`):
 - **What we do:** All app/screen styling lives in inline `CSS = """..."""` class variables. Total ~135 lines of CSS spread across files.
 - **What docs say:** CSS_PATH "separates how your app _looks_ from how it _works_… and enables live editing with `textual run my_app.py --dev`." External `.tcss` files are recommended for app-wide styling.
 - **Citation:** https://textual.textualize.io/guide/CSS/ (CSS_PATH section)
-- **Remediation sketch:** Promote app-level rules to `src/uw_s3/tui/uw_s3.tcss` referenced via `UWS3App.CSS_PATH`. Keep widget-scoped styling in `DEFAULT_CSS` for reusable widgets like `EndpointBar` (already correct). Per-screen styles stay inline if migrating is churn-y — accept that as the project's choice via `specs/3_DECISIONS.md` if desired.
+- **Remediation sketch:** Promote app-level rules to `src/uw_s3/tui/uw_s3.tcss` referenced via `UWS3App.CSS_PATH`. Keep widget-scoped styling in `DEFAULT_CSS` for reusable widgets like `EndpointBar` (already correct). Per-screen styles stay inline if migrating is churn-y — accept that as the project's choice via `specs/DECISIONS.md` if desired.
 
 ### [minor] m2 — Workers lack `exclusive=True` / `group=` and can stack on key spam
 - **File:** `screens/file_manager.py:206` (`_load_buckets`), `:223` (`_load_objects`), `:650` (`_do_delete`), `:713` (`_do_rename`); `screens/mount.py:132` (`_load_buckets`).
@@ -129,10 +129,10 @@ Recording these so we don't regress them:
 | M1 | Fixed       | `screens/file_manager.py` — `threading.Event` removed; `worker.is_cancelled` drives both scan and per-file callbacks; Cancel button now calls `self.workers.cancel_group(self, "sync")`; sync actions tagged `group="sync"`. |
 | M2 | Fixed       | `app.py` — `on_unmount` is async and offloads `cleanup_mounts()` via `asyncio.to_thread`. |
 | M3 | Fixed       | `screens/base.py` — `S3Screen.ui()` now fetches `get_current_worker()` and no-ops when the worker is cancelled (defensive `NoActiveWorker` fallback runs `fn` directly on the main thread). Single helper change covers every `@work(thread=True)` call site. |
-| m1 | Accepted    | `specs/3_DECISIONS.md` D-0001 — inline `CSS = """..."""` retained. |
+| m1 | Accepted    | `specs/DECISIONS.md` D-0001 — inline `CSS = """..."""` retained. |
 | m2 | Fixed       | `file_manager.py` (`_load_buckets`, `_load_objects`, `_do_delete`, `_do_rename`) and `mount.py` (`_load_buckets`) now declare `exclusive=True` with appropriate `group=` (`load` / `mutate`). |
 | m3 | Fixed       | `screens/confirm.py` — `Binding("escape", "no", "Cancel")` added; `_no` renamed to `action_no`. |
-| m4 | Accepted    | `specs/3_DECISIONS.md` D-0002 — `call_from_thread` retained per Constitution §Architecture principle 4. |
+| m4 | Accepted    | `specs/DECISIONS.md` D-0002 — `call_from_thread` retained per Constitution §Architecture principle 4. |
 | m5 | Fixed       | `bucket_management.py` — `BucketNotEmpty` Message defined and posted from worker; main-thread `_on_bucket_not_empty` pushes the confirm modal. |
 | m6 | Fixed       | `main_menu.py` — actions route through `_push_unique()` that guards on `isinstance(self.app.screen, type(screen))`. |
 | m7 | Fixed       | `tests/test_tui.py` — added `test_confirm_screen_escape_dismisses_as_false` and `test_navigate_to_file_manager`. |
@@ -145,4 +145,4 @@ Verification at remediation time:
 
 ## Next step
 
-Human walkthrough of `./smoke_test.md` on both endpoints (`campus`, `web`) — that's the only step left for Outcome 4. Once signed off, append a closing change-log line to `../intent.md` via `/ls-intent`.
+Human walkthrough of `./smoke_test.md` on both endpoints (`campus`, `web`) — that's the only step left for Outcome 4. Once signed off, append a closing change-log line to `../intent.md` via `/spec-intent`.

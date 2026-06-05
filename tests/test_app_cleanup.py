@@ -1,4 +1,4 @@
-"""Tests for the UWS3App survival/cleanup flow (IT-3)."""
+"""Tests for the UWS3App survival/cleanup flow (I-3)."""
 
 from __future__ import annotations
 

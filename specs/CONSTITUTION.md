@@ -2,7 +2,7 @@
 
 Ratified: 2026-05-22
 
-Non-negotiable project principles. Every other `ls-` skill validates its output against this file and refuses to produce violating output.
+Non-negotiable project principles. Every other `spec-` skill validates its output against this file and refuses to produce violating output.
 
 This is a lean constitution for a small, rapid-prototyping Python project. It locks in only the rules whose violation would cost real time or trust: the toolchain, the threading rule that keeps the TUI responsive, the type discipline, the scope fence that stops the project from sprawling, and the credential-handling rule.
 
@@ -39,5 +39,5 @@ This is a lean constitution for a small, rapid-prototyping Python project. It lo
 ## Amendments
 
 - **2026-05-22** — Initial constitution ratified.
-- **2026-05-22** — §8 generalized from rclone-specific to backend-agnostic. The durable safety invariants (no blocking the Textual event loop, no S3 credentials on disk) are kept; the choice between external-binary and in-process Python mount helpers is now data-driven per `specs/2_INTENT/IT-2-s3fs-migration/intent.md`. Reason: rclone is being replaced with one of two `s3fs` flavors, and the old §8 blocked both the rclone removal and the in-process candidate before evaluation could happen.
-- **2026-05-23** — §7 carve-out + §10 added. §7's blanket "no background daemon" blocked the IT-3 goal of making an active mount survive a TUI exit. The amendment keeps the general prohibition but allows a single-purpose mount worker, with the worker's contract spelled out in the new §10 so the carve-out can't be reused as a backdoor for arbitrary background services. Reason: IT-3 mount-survival; mounts dying when the user closes the TUI is the top friction point in current usage.
+- **2026-05-22** — §8 generalized from rclone-specific to backend-agnostic. The durable safety invariants (no blocking the Textual event loop, no S3 credentials on disk) are kept; the choice between external-binary and in-process Python mount helpers is now data-driven per `specs/INTENT/I-2-s3fs-migration/intent.md`. Reason: rclone is being replaced with one of two `s3fs` flavors, and the old §8 blocked both the rclone removal and the in-process candidate before evaluation could happen.
+- **2026-05-23** — §7 carve-out + §10 added. §7's blanket "no background daemon" blocked the I-3 goal of making an active mount survive a TUI exit. The amendment keeps the general prohibition but allows a single-purpose mount worker, with the worker's contract spelled out in the new §10 so the carve-out can't be reused as a backdoor for arbitrary background services. Reason: I-3 mount-survival; mounts dying when the user closes the TUI is the top friction point in current usage.

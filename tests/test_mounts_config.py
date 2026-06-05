@@ -1,4 +1,4 @@
-"""Tests for the detached-mount persistence layer (IT-3)."""
+"""Tests for the detached-mount persistence layer (I-3)."""
 
 from __future__ import annotations
 

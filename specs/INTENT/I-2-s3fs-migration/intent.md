@@ -1,5 +1,5 @@
 ---
-id: IT-2
+id: I-2
 title: S3 mount backend — replace rclone with s3fs
 slug: s3fs-migration
 status: draft
@@ -25,7 +25,7 @@ The current rclone FUSE mount is brittle along three axes that blocked the previ
 - **WHEN** the user presses Unmount, **THE SYSTEM SHALL** release the mountpoint within 5 seconds and leave no orphan mount helpers (`pgrep -f s3fs` and `pgrep -f rclone` both return empty).
 - **WHEN** the app exits while a mount is active, **THE SYSTEM SHALL** clean up all mount processes within 5 seconds without blocking the Textual event loop (Constitution §4 still binds).
 - **WHEN** the chosen backend lands on `main`, **THE SYSTEM SHALL** contain no `rclone.py`, no `RcloneMount`, no `RCLONE_CONFIG_UWS3_*` env wiring, and no reference to `rclone` in source or `pyproject.toml`.
-- **WHEN** the new backend is in place, **THE SYSTEM SHALL** have every Mount checkbox in `../IT-1-tui-audit/experiments/smoke_test.md` verified on both `campus` and `web` endpoints, with the Sign-off block filled in.
+- **WHEN** the new backend is in place, **THE SYSTEM SHALL** have every Mount checkbox in `../I-1-tui-audit/experiments/smoke_test.md` verified on both `campus` and `web` endpoints, with the Sign-off block filled in.
 
 ## Non-Goals
 
@@ -39,9 +39,9 @@ The current rclone FUSE mount is brittle along three axes that blocked the previ
 ## Constraints
 
 - **Constitution §4** — mount lifecycle calls from the TUI MUST run on `@work(thread=True)` with UI updates via `call_from_thread()`.
-- **Constitution §8 conflict** — §8 names rclone explicitly. Full removal makes §8 moot post-merge; adopting Python `s3fs` would also violate §8's spirit ("mount helpers stay external, not Python deps"). Invoke `/ls-constitution` to generalize §8 before the chosen backend merges.
+- **Constitution §8 conflict** — §8 names rclone explicitly. Full removal makes §8 moot post-merge; adopting Python `s3fs` would also violate §8's spirit ("mount helpers stay external, not Python deps"). Invoke `/spec-constitution` to generalize §8 before the chosen backend merges.
 - **Constitution §9** — credentials remain env-only; neither backend may write creds to disk.
-- Both s3fs flavors MUST be prototyped against `../IT-1-tui-audit/experiments/smoke_test.md#Mount` on both endpoints; the backend choice is data-driven from that exercise and logged in `../../3_DECISIONS.md`.
+- Both s3fs flavors MUST be prototyped against `../I-1-tui-audit/experiments/smoke_test.md#Mount` on both endpoints; the backend choice is data-driven from that exercise and logged in `../../DECISIONS.md`.
 - Target platforms: Linux (incl. WSL2 with fuse3), macOS optional. No Windows-native FUSE.
 - `s3fs-fuse` and Python `s3fs` MUST both honor the existing `S3_ENDPOINT` switch (`campus` ↔ `web`).
 

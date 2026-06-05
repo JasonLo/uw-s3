@@ -70,7 +70,7 @@ src/uw_s3/
 - **Material-style TUI CSS:** Cards use `round` borders + `$boost` background + `border_title` for section headers. Styles are defined per-screen.
 - **Sync comparison:** Size-based only (not content hashes). `SyncEngine.status_push/pull()` for dry-run, `.push()/.pull()` for execution.
 - **Mount cleanup:** `UWS3App.on_unmount()` calls `Mount.unmount()` for each entry in `active_mounts` (runs `fusermount -u` and joins the FUSE handler thread). Credentials are passed to `s3fs.S3FileSystem(key=..., secret=..., client_kwargs=...)` — never written to disk.
-- **Mount backend is in-process:** Python `s3fs` runs the FUSE handler inside a daemon thread in the python process — no separate helper binary, no orphan-process failure mode. If `s3fs`/`fsspec.fuse` aren't importable, the mount screen disables its Mount button. See `specs/2_INTENT/IT-2-s3fs-migration/experiments/results.md` for the prototype comparison that led to this choice.
+- **Mount backend is in-process:** Python `s3fs` runs the FUSE handler inside a daemon thread in the python process — no separate helper binary, no orphan-process failure mode. If `s3fs`/`fsspec.fuse` aren't importable, the mount screen disables its Mount button. See `specs/INTENT/I-2-s3fs-migration/experiments/results.md` for the prototype comparison that led to this choice.
 
 <!-- lite-spec:pointer-block:start -->
 
@@ -78,16 +78,16 @@ src/uw_s3/
 
 Before generating output that touches design, architecture, scope, or behavior, load the spec files lazily — they override CLAUDE.md on conflict.
 
-- **`specs/1_CONSTITUTION.md`** — non-negotiable principles. Every change to principles MUST go through `ls-constitution`; never edit silently.
-- **`specs/2_INTENT/IT-N-<slug>/intent.md`** — one folder per intent, each with its own `experiments/` subfolder. Active intents are those with `status: draft` or `status: in_progress` in the YAML frontmatter; `status` is derived by `ls-check` and MUST NOT be hand-edited. Outcomes use EARS (`WHEN <trigger> THE SYSTEM SHALL <response>`) as testable success criteria. Refine via `ls-intent`.
-- **`specs/3_DECISIONS.md`** — append-only architectural choices, each tagged with the originating intent (`[intent: IT-N]`). Consult before re-litigating a settled question; supersede via `ls-decisions` rather than editing.
+- **`specs/CONSTITUTION.md`** — non-negotiable principles. Every change to principles MUST go through `spec-constitution`; never edit silently.
+- **`specs/INTENT/`** — one folder per intent (`I-N-<slug>/intent.md`); `experiments/`, `checks/`, and an optional `plan.md` sibling appear only on demand. Open intents have `status: draft` or `in_progress`; finished ones have `status: complete` or `superseded`. Outcomes use EARS (`WHEN <trigger> THE SYSTEM SHALL <response>`) as testable success criteria. Load only the intents whose scope intersects your task. Create/refine/supersede via `spec-intent`; `spec-check` derives `status` from outcome pass-counts.
+- **`specs/DECISIONS.md`** — append-only engineering log of settled architectural choices, each tagged with the originating intent (`[intent: I-N]`). A plain doc (lite-spec dropped its decisions skill in v0.2.0); consult before re-litigating a settled question.
 
 ## Spec file ownership
 
 Two tiers:
 
-- **HUMAN-OWNED** — `specs/1_CONSTITUTION.md` (governance) and `specs/2_INTENT/*/intent.md` (product/scope). AI agents MUST modify these only via `/ls-constitution` and `/ls-intent` respectively. Never with direct Edit/Write/sed, not even for a "trivial sync" like fixing a stale count.
-- **AGENT-WRITABLE** — `specs/3_DECISIONS.md` (engineering log). AI agents MAY append or supersede entries directly, OR via `/ls-decisions` for the guided path. Direct writes MUST follow the format in `ls-decisions`, validate against the constitution first, and only record decisions settled with the human in the current conversation (no phantom commitments).
+- **HUMAN-OWNED** — `specs/CONSTITUTION.md` (governance) and `specs/INTENT/` (product/scope — the whole tree, every `I-N-<slug>/intent.md`). AI agents MUST modify these only via `/spec-constitution` and `/spec-intent` respectively. Never with direct Edit/Write/sed, not even for a "trivial sync" like fixing a stale count. The exception is the skill-managed frontmatter fields on each `intent.md` (`status`, `closed`, `verdict_*`), which `spec-check` writes.
+- **AGENT-WRITABLE** — `specs/INTENT/I-N-<slug>/plan.md` (per-intent implementation plan, regenerable) and `specs/DECISIONS.md` (engineering log). `intent.md` remains the source of truth.
 
 Files outside `specs/` (README, this file, source, `SKILL.md` bodies, scripts) are fair game for normal edits.
 
@@ -95,10 +95,9 @@ Files outside `specs/` (README, this file, source, `SKILL.md` bodies, scripts) a
 
 This repo uses **lite-spec** — invoke the skills by name:
 
-- `/ls-init` — bootstrap or repair the lite-spec setup
-- `/ls-constitution` — ratify or amend principles (`specs/1_CONSTITUTION.md`)
-- `/ls-intent` — draft or refine intent (`specs/2_INTENT/IT-N-<slug>/intent.md`)
-- `/ls-decisions` — log a decision (`specs/3_DECISIONS.md`)
-- `/ls-check` — drift report against intent + constitution
+- `/spec-init` — bootstrap or repair the lite-spec setup
+- `/spec-constitution` — ratify or amend principles (`specs/CONSTITUTION.md`)
+- `/spec-intent` — draft, refine, or supersede an intent (`specs/INTENT/I-N-<slug>/intent.md`)
+- `/spec-check` — drift report + status derivation across open intents
 
 <!-- lite-spec:pointer-block:end -->

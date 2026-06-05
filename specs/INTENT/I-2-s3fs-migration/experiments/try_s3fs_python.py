@@ -1,7 +1,7 @@
 """Evaluate Python s3fs + fsspec.fuse against a uw-s3 bucket.
 
 Usage:
-    uv run python specs/2_INTENT/IT-2-s3fs-migration/experiments/try_s3fs_python.py <bucket> [campus|web]
+    uv run python specs/INTENT/I-2-s3fs-migration/experiments/try_s3fs_python.py <bucket> [campus|web]
 
 Credentials are read from S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY (never
 written to disk). Mount stays up; Ctrl-C unmounts.

@@ -188,10 +188,10 @@ choice; nothing in the constitution blocks it.
 2. Defensive startup `fusermount -uz` of the configured mountpoint
    in the new `Mount` class, to absorb the brief stale window from
    a prior crashed session.
-3. Smoke-test the Mount section of `../../IT-1-tui-audit/experiments/smoke_test.md`
+3. Smoke-test the Mount section of `../../I-1-tui-audit/experiments/smoke_test.md`
    end-to-end on both endpoints once the new backend is wired in.
 
-**Next action:** log **D-0003** via `/ls-decisions` quoting this
+**Next action:** append **D-0003** to `../../../DECISIONS.md` quoting this
 recommendation, then resume the plan at Phase 4 (rename
 `src/uw_s3/rclone.py` → `src/uw_s3/mount_backend.py` parametrized
 on Python s3fs).

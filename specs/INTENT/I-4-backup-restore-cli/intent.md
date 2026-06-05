@@ -1,5 +1,5 @@
 ---
-id: IT-4
+id: I-4
 title: Programmatic backup/restore CLI
 slug: backup-restore-cli
 status: draft
