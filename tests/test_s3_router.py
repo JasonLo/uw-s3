@@ -92,6 +92,8 @@ def test_probe_merges_reachable_and_lists() -> None:
 
     web_client = router.client(WEB_ENDPOINT)
     web_client.list_buckets = MagicMock(return_value=["w1", "w2"])
+    # bucket_exists discriminates by endpoint; both live on web here.
+    web_client.bucket_exists = MagicMock(return_value=True)
 
     with patch("uw_s3.s3_router._tcp_reachable", side_effect=fake_reachable):
         router.probe()
@@ -99,6 +101,26 @@ def test_probe_merges_reachable_and_lists() -> None:
     assert router.reachable_endpoints == {WEB_ENDPOINT}
     assert router.endpoint_for("w1") == WEB_ENDPOINT
     assert CAMPUS_ENDPOINT in router.probe_errors
+
+
+def test_probe_routes_campus_bucket_listed_on_both() -> None:
+    """The reported bug: both endpoints list a campus bucket; routing must
+    follow bucket_exists (campus), not last-listed (web)."""
+    router = _router({}, set())
+    campus = router.client(CAMPUS_ENDPOINT)
+    web = router.client(WEB_ENDPOINT)
+    # Both endpoints list the union; only campus actually owns "rabbit".
+    campus.list_buckets = MagicMock(return_value=["rabbit", "webby"])
+    web.list_buckets = MagicMock(return_value=["rabbit", "webby"])
+    campus.bucket_exists = MagicMock(side_effect=lambda b: b == "rabbit")
+    web.bucket_exists = MagicMock(side_effect=lambda b: b == "webby")
+
+    with patch("uw_s3.s3_router._tcp_reachable", return_value=True):
+        router.probe()
+
+    assert router.endpoint_for("rabbit") == CAMPUS_ENDPOINT
+    assert router.endpoint_for("webby") == WEB_ENDPOINT
+    assert router.client_for("rabbit").endpoint == CAMPUS_ENDPOINT
 
 
 def test_probe_records_error_when_listing_fails() -> None:

@@ -82,19 +82,31 @@ class S3Router:
         """Detect reachable endpoints and refresh the registry. Blocking — run
         on a worker thread (Constitution §4)."""
         reachable: set[str] = set()
-        listed: dict[str, list[str]] = {}
+        union: set[str] = set()
         errors: dict[str, str] = {}
         for endpoint in ENDPOINTS:
             if not _tcp_reachable(endpoint, timeout=self.connect_timeout):
                 errors[endpoint] = "unreachable"
                 continue
             try:
-                listed[endpoint] = self.client(endpoint).list_buckets()
+                union.update(self.client(endpoint).list_buckets())
                 reachable.add(endpoint)
             except Exception as exc:
                 errors[endpoint] = str(exc)
+        # list_buckets returns the same global union on every endpoint, so it
+        # can't reveal where a bucket lives. bucket_exists (HEAD bucket) can: a
+        # campus bucket 404s on web and vice versa. Probe each name to find home.
+        homes: dict[str, str] = {}
+        for bucket in union:
+            for endpoint in reachable:
+                try:
+                    if self.client(endpoint).bucket_exists(bucket):
+                        homes[bucket] = endpoint
+                        break
+                except Exception:
+                    continue
         self.probe_errors = errors
-        self.registry.merge_probe(reachable, listed)
+        self.registry.merge_probe(reachable, union, homes)
 
     @property
     def reachable_endpoints(self) -> set[str]:

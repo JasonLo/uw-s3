@@ -66,24 +66,40 @@ class BucketRegistry:
         CONFIG_FILE.write_text(json.dumps(self._map, indent=2, sort_keys=True))
 
     def merge_probe(
-        self, reachable_endpoints: set[str], listed: dict[str, list[str]]
+        self,
+        reachable_endpoints: set[str],
+        union: set[str],
+        homes: dict[str, str],
     ) -> None:
         """Fold a fresh probe into the map.
 
-        For every reachable endpoint that listed successfully, its returned
-        buckets become authoritative: their endpoint is (re)recorded, and any
-        cached bucket still pointing at that endpoint but no longer listed is
-        dropped (it was deleted). Entries for endpoints that were not listed are
-        left untouched, so campus buckets survive while off-VPN.
+        ``list_buckets`` returns the same global union of names on *every*
+        endpoint, so it cannot tell where a bucket lives; only ``bucket_exists``
+        (HEAD bucket) discriminates. The probe therefore passes the ``union`` of
+        all visible names plus ``homes`` — the bucket -> endpoint pairs it could
+        confirm via ``bucket_exists`` on a reachable endpoint.
+
+        Confirmed homes are authoritative (this corrects buckets that were
+        previously mis-pinned). A bucket in the union whose home could not be
+        confirmed (it lives on an unreachable endpoint) keeps its cached home, or
+        is inferred to the sole unreachable endpoint — so campus buckets survive
+        and stay routable while off-VPN. Buckets absent from the union were
+        deleted and are dropped. When nothing is reachable the cache is left
+        untouched.
         """
         self._reachable = set(reachable_endpoints)
-        for endpoint, names in listed.items():
-            current = set(names)
-            self._map = {
-                b: ep for b, ep in self._map.items() if ep != endpoint or b in current
-            }
-            for name in current:
-                self._map[name] = endpoint
+        if not reachable_endpoints:
+            return
+        unreachable = [e for e in ENDPOINTS if e not in reachable_endpoints]
+        new_map: dict[str, str] = {}
+        for bucket in union:
+            if bucket in homes:
+                new_map[bucket] = homes[bucket]
+            elif bucket in self._map:
+                new_map[bucket] = self._map[bucket]
+            elif len(unreachable) == 1:
+                new_map[bucket] = unreachable[0]
+        self._map = new_map
         self.save()
 
     def endpoint_for(self, bucket: str) -> str | None:

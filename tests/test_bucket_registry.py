@@ -40,30 +40,62 @@ def test_load_ignores_unknown_endpoints(buckets_file: Path) -> None:
     assert loaded.bucket_names() == ["a"]
 
 
-def test_merge_probe_records_listed_buckets(buckets_file: Path) -> None:
+def test_merge_probe_records_confirmed_homes(buckets_file: Path) -> None:
     r = BucketRegistry()
     r.merge_probe(
         {CAMPUS_ENDPOINT, WEB_ENDPOINT},
-        {CAMPUS_ENDPOINT: ["c1"], WEB_ENDPOINT: ["w1", "w2"]},
+        {"c1", "w1", "w2"},
+        {"c1": CAMPUS_ENDPOINT, "w1": WEB_ENDPOINT, "w2": WEB_ENDPOINT},
     )
     assert r.endpoint_for("c1") == CAMPUS_ENDPOINT
     assert r.endpoint_for("w2") == WEB_ENDPOINT
     assert r.is_reachable("c1") is True
 
 
+def test_merge_probe_corrects_mispinned_bucket(buckets_file: Path) -> None:
+    # The original bug: a campus bucket was pinned to web because both
+    # endpoints list it. A confirmed home (via bucket_exists) must override.
+    r = BucketRegistry({"rabbit": WEB_ENDPOINT})
+    r.merge_probe(
+        {CAMPUS_ENDPOINT, WEB_ENDPOINT},
+        {"rabbit"},
+        {"rabbit": CAMPUS_ENDPOINT},
+    )
+    assert r.endpoint_for("rabbit") == CAMPUS_ENDPOINT
+    assert r.is_reachable("rabbit") is True
+
+
 def test_merge_probe_keeps_unreachable_entries(buckets_file: Path) -> None:
-    # campus bucket known from before; now only web is reachable.
+    # campus bucket known from before; now only web is reachable. The union
+    # (from web's list_buckets) still includes it, but its home can't be
+    # confirmed, so the cached campus home is kept.
     r = BucketRegistry({"campus-only": CAMPUS_ENDPOINT})
-    r.merge_probe({WEB_ENDPOINT}, {WEB_ENDPOINT: ["w1"]})
+    r.merge_probe({WEB_ENDPOINT}, {"w1", "campus-only"}, {"w1": WEB_ENDPOINT})
     assert r.endpoint_for("campus-only") == CAMPUS_ENDPOINT
     assert r.is_reachable("campus-only") is False
     assert r.is_reachable("w1") is True
 
 
+def test_merge_probe_infers_sole_unreachable_endpoint(buckets_file: Path) -> None:
+    # Off-VPN, no cache: web lists a bucket it can't access. Its home must be
+    # the only unreachable endpoint (campus), so it stays routable on VPN.
+    r = BucketRegistry()
+    r.merge_probe({WEB_ENDPOINT}, {"w1", "mystery"}, {"w1": WEB_ENDPOINT})
+    assert r.endpoint_for("mystery") == CAMPUS_ENDPOINT
+    assert r.is_reachable("mystery") is False
+
+
+def test_merge_probe_offline_keeps_cache(buckets_file: Path) -> None:
+    r = BucketRegistry({"a": CAMPUS_ENDPOINT})
+    r.merge_probe(set(), set(), {})
+    assert r.endpoint_for("a") == CAMPUS_ENDPOINT
+    assert r.is_reachable("a") is False
+
+
 def test_merge_probe_drops_deleted_reachable_bucket(buckets_file: Path) -> None:
     r = BucketRegistry({"gone": WEB_ENDPOINT, "stays": WEB_ENDPOINT})
     # web reachable and lists only "stays" -> "gone" was deleted.
-    r.merge_probe({WEB_ENDPOINT}, {WEB_ENDPOINT: ["stays"]})
+    r.merge_probe({WEB_ENDPOINT}, {"stays"}, {"stays": WEB_ENDPOINT})
     assert r.endpoint_for("gone") is None
     assert r.endpoint_for("stays") == WEB_ENDPOINT
 
